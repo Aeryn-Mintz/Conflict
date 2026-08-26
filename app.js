@@ -797,6 +797,7 @@ document.getElementById('toggle-yt-view').addEventListener('click', () => {
     const wrapper = document.getElementById('yt-wrapper');
     wrapper.style.display = (wrapper.style.display === 'none') ? 'flex' : 'none';
 });
+
 // ==========================================
 // 4. CHAT SYSTEM
 // ==========================================
