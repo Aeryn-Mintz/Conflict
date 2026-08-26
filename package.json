@@ -1,6 +1,6 @@
 {
   "name": "conflict",
-  "version": "1.5.2",
+  "version": "1.5.5",
   "description": "Secure P2P Comms & Media",
   "main": "main.js",
   "scripts": {

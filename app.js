@@ -148,8 +148,17 @@ socket.onmessage = async (event) => {
             if (vid2) vid2.remove();
         }
         else if (data.action === 'offer' && data.targetId === myId) {
-            peerNames[data.userId] = data.username || "Guest";
-            peerAvatars[data.userId] = data.avatar || null;
+            // FIX: Only update name and avatar if they are actually included in this payload!
+            if (data.username) {
+                peerNames[data.userId] = data.username;
+            } else if (!peerNames[data.userId]) {
+                peerNames[data.userId] = "Guest";
+            }
+            
+            if (data.avatar) {
+                peerAvatars[data.userId] = data.avatar;
+            }
+
             addRemoteUserCard(data.userId, peerNames[data.userId], peerAvatars[data.userId]);
             
             let pc = peers[data.userId] || createPeerConnection(data.userId);
@@ -479,6 +488,8 @@ async function applyAudioOutput(deviceId) {
 }
 
 document.getElementById('join-voice-btn').addEventListener('click', async () => {
+    let micSuccess = false;
+    
     try {
         if (!audioCtx) {
             audioCtx = new (window.AudioContext || window.webkitAudioContext)();
@@ -493,18 +504,23 @@ document.getElementById('join-voice-btn').addEventListener('click', async () => 
             { audio: { echoCancellation: true, noiseSuppression: true } };
 
         localMicStream = await navigator.mediaDevices.getUserMedia(constraints);
-        
-        Object.values(peers).forEach(pc => addLocalTracksSafely(pc));
-
-        const currentName = document.getElementById('display-username').textContent;
-        socket.send(JSON.stringify({ action: 'join', userId: myId, username: currentName, avatar: localStorage.getItem('appAvatar') || null }));
-        
-        document.getElementById('join-voice-btn').disabled = true;
-        document.getElementById('join-voice-btn').innerText = "🎙️ Connected";
-        document.getElementById('mute-mic-btn').disabled = false;
+        micSuccess = true;
     } catch (error) {
         console.error("Could not access microphone:", error);
-        alert("Microphone access denied or hardware error!");
+        alert("Microphone blocked or not detected! Joining as a Listener. (Check your OS Privacy settings to allow Desktop Apps to use the microphone).");
+    }
+
+    // WE JOIN THE WEBRTC ROOM REGARDLESS OF MIC SUCCESS!
+    Object.values(peers).forEach(pc => addLocalTracksSafely(pc));
+
+    const currentName = document.getElementById('display-username').textContent;
+    socket.send(JSON.stringify({ action: 'join', userId: myId, username: currentName, avatar: localStorage.getItem('appAvatar') || null }));
+    
+    document.getElementById('join-voice-btn').disabled = true;
+    document.getElementById('join-voice-btn').innerText = micSuccess ? "🎙️ Connected" : "🎧 Listening";
+    
+    if (micSuccess) {
+        document.getElementById('mute-mic-btn').disabled = false;
     }
 });
 
