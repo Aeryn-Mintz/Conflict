@@ -127,59 +127,38 @@
 
 // Replace the host-started event handler (around lines 128-134) with:
 ipcRenderer.on('host-started', (event, data) => {
-    // Handle both old string format and new object format for backward compatibility
-    const tunnelUrl = typeof data === 'string' ? data : data.fullUrl;
-    const shareCode = typeof data === 'object' && data.shareCode ? data.shareCode : null;
-    
     document.getElementById('host-status').style.display = 'none';
     document.getElementById('invite-section').style.display = 'block';
-    document.getElementById('invite-link-display').innerText = tunnelUrl;
     
-    // Store and display the share code
-    if (shareCode) {
-        localStorage.setItem('conflictShareCode', shareCode);
-        
-        // Create share code display element
-        const shareCodeDisplay = document.createElement('div');
-        shareCodeDisplay.style.marginTop = '10px';
-        shareCodeDisplay.style.padding = '8px';
-        shareCodeDisplay.style.background = 'rgba(0,0,0,0.2)';
-        shareCodeDisplay.style.borderRadius = '6px';
-        shareCodeDisplay.style.fontSize = '20px';
-        shareCodeDisplay.style.fontWeight = 'bold';
-        shareCodeDisplay.style.textAlign = 'center';
-        shareCodeDisplay.style.letterSpacing = '2px';
-        shareCodeDisplay.style.color = 'var(--accent-main)';
-        shareCodeDisplay.style.fontFamily = 'monospace';
-        shareCodeDisplay.innerHTML = `Share this code: <span id="share-code-value">${shareCode}</span>`;
-        
-        // Add copy button
-        const copyBtn = document.createElement('button');
-        copyBtn.textContent = 'Copy Code';
-        copyBtn.style.marginLeft = '10px';
-        copyBtn.style.padding = '4px 8px';
-        copyBtn.style.fontSize = '12px';
-        copyBtn.style.borderRadius = '4px';
-        copyBtn.style.border = 'none';
-        copyBtn.style.background = 'var(--accent-main)';
-        copyBtn.style.color = 'white';
-        copyBtn.style.cursor = 'pointer';
-        copyBtn.onclick = () => {
-            navigator.clipboard.writeText(shareCode).then(() => {
-                copyBtn.textContent = 'Copied!';
-                setTimeout(() => copyBtn.textContent = 'Copy Code', 1500);
-            });
-        };
-        shareCodeDisplay.appendChild(copyBtn);
-        
-        document.getElementById('invite-section').appendChild(shareCodeDisplay);
+    const inviteDisplay = document.getElementById('invite-link-display');
+    inviteDisplay.innerHTML = ''; // Clear loading text
+    
+    // 1. If we have internet, show the Global Share Code
+    if (data.shareCode) {
+        localStorage.setItem('conflictShareCode', data.shareCode);
+        inviteDisplay.innerHTML += `
+            <div style="margin-bottom: 10px;">
+                <span style="color: var(--text-muted); font-size: 11px;">GLOBAL SHARE CODE:</span><br>
+                <strong style="font-size: 20px; letter-spacing: 2px;">${data.shareCode}</strong>
+            </div>
+        `;
+    } else {
+        inviteDisplay.innerHTML += `<div style="color: #fbbf24; font-size: 12px; margin-bottom: 10px;">⚠️ Offline Mode Active</div>`;
     }
+
+    // 2. Always show the Local LAN IP for zero-ping offline play
+    inviteDisplay.innerHTML += `
+        <div>
+            <span style="color: var(--text-muted); font-size: 11px;">LOCAL LAN IP (Offline):</span><br>
+            <span style="font-size: 14px;">${data.lanIp}</span>
+        </div>
+    `;
     
-    // FIX: The host connects locally for zero ping. The tunnel is only for friends!
+    // The host ALWAYS connects locally to their own server
     localStorage.setItem('conflictServerUrl', 'ws://localhost:8080');
 });
 
-// Replace the join logic (around lines 158-172) with:
+
         ipcRenderer.on('host-failed', (event, errorMsg) => {
             document.getElementById('host-status').innerText = `Error: ${errorMsg}\nTry restarting the app.`;
             document.getElementById('host-status').style.color = "var(--accent-alert)";
@@ -205,27 +184,25 @@ document.getElementById('btn-connect-join').addEventListener('click', () => {
     const input = document.getElementById('invite-input').value.trim();
     if (input) {
         let wsUrl;
+        const cleaned = input.toLowerCase().replace(/[^a-z0-9.]/g, '');
         
-        // Clean and validate input
-        const cleaned = input.toLowerCase().replace(/[^a-z0-9]/g, '');
-        
-        // Check if input looks like our 6-char share code
-        if (/^[a-z0-9]{6}$/.test(cleaned)) {
-            // It's our share code - construct the expected URL
-            // Try our preferred format first
+        // 1. If it looks like a LAN IP (e.g., 192.168.1.15:8080)
+        if (input.match(/^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}:\d{4}$/)) {
+            wsUrl = `ws://${input}`;
+        }
+        // 2. If it's a 6-character internet share code
+        else if (/^[a-z0-9]{6}$/.test(cleaned)) {
             wsUrl = `https://conflict-${cleaned}.loca.lt`.replace('http', 'ws');
-        } else if (input.includes('.')) {
-            // Looks like a URL or subdomain.domain format
+        } 
+        // 3. Fallback for raw URLs
+        else {
             try {
                 const url = new URL(input.startsWith('http') ? input : `https://${input}`);
                 wsUrl = url.toString().replace('http', 'ws');
             } catch (e) {
-                alert("Invalid Invite Link!");
+                alert("Invalid Invite Link or IP!");
                 return;
             }
-        } else {
-            // Assume it's just the subdomain part (no dots)
-            wsUrl = `https://${input}.loca.lt`.replace('http', 'ws');
         }
         
         localStorage.setItem('conflictServerUrl', wsUrl);
