@@ -28,8 +28,6 @@ let localMicStream = null;
 let localScreenStream = null;
 let localCamStream = null;
 
-let ytPlayer = null;
-let pendingYtVideoId = null;
 let currentView = 'main';
 
 // Tab Switching
@@ -167,14 +165,12 @@ socket.onmessage = async (event) => {
             const rollerName = data.username || 'Guest';
             addChatLine('System', `🎲 ${rollerName} rolled ${data.results.join(', ')} (${data.type})`, true);
             
-            // Figure out the max value of the dice they just rolled
             const sides = parseInt(data.type.replace(/^\d+d/, '')) || 20;
 
             if (currentView === 'rpg') {
                 animateDiceRoll2D(data.results, data.type.replace(/\d+/, '')); 
             } 
             
-            // If the result includes the max side, FIREWORKS!
             if (data.results.includes(sides)) {
                 triggerFireworks();
             }
@@ -231,6 +227,9 @@ socket.onmessage = async (event) => {
         }
         else if (data.action === 'yt_play') {
             if (ytPlayer && ytPlayer.getPlayerState() !== YT.PlayerState.PLAYING) ytPlayer.playVideo();
+        }
+        else if (data.action === 'sound_played' && data.userId !== myId) {
+            addChatLine('System', `🔊 Sound played: ${data.soundName}`, true);
         }
     } catch (e) {
         console.error("Error parsing message:", e);
@@ -455,7 +454,6 @@ document.getElementById('mute-mic-btn').addEventListener('click', (e) => {
     }
 });
 
-// Camera Logic
 document.getElementById('toggle-cam-btn').addEventListener('click', async (e) => {
     const btn = e.target;
     const localCam = document.getElementById('local-cam-video');
@@ -514,7 +512,6 @@ document.getElementById('toggle-cam-btn').addEventListener('click', async (e) =>
     }
 });
 
-// Screen Share Logic
 const shareScreenBtn = document.getElementById('share-screen-btn');
 const localVideo = document.getElementById('local-screen-video'); 
 
@@ -607,6 +604,8 @@ document.getElementById('cancel-screen-picker').onclick = () => {
 // ==========================================
 // 3. FRONTEND YOUTUBE PLAYER & QUEUE SYSTEM
 // ==========================================
+let ytPlayer = null;
+let pendingYtVideoId = null;
 let ytQueue = [];
 let currentQueueIndex = -1;
 
@@ -616,13 +615,11 @@ function extractYouTubeId(url) {
         const u = new URL(url.trim());
         const host = u.hostname.replace(/^www\./, '').replace(/^m\./, '');
         let id = null;
-
         if (host === 'youtu.be') {
             id = u.pathname.split('/')[1];
         } else if (host === 'youtube.com' || host === 'music.youtube.com') {
-            if (u.pathname === '/watch') {
-                id = u.searchParams.get('v');
-            } else {
+            if (u.pathname === '/watch') id = u.searchParams.get('v');
+            else {
                 const match = u.pathname.match(/^\/(embed|shorts|live)\/([^\/]+)/);
                 if (match) id = match[2];
             }
@@ -650,10 +647,7 @@ window.onYouTubeIframeAPIReady = function () {
                 }
             },
             onStateChange: (event) => {
-                // When video finishes playing (State 0), auto-advance queue!
-                if (event.data === YT.PlayerState.ENDED) {
-                    playNextInQueue();
-                }
+                if (event.data === YT.PlayerState.ENDED) playNextInQueue();
             },
             onError: (e) => {
                 console.error('YouTube player error:', e.data);
@@ -667,9 +661,7 @@ window.onYouTubeIframeAPIReady = function () {
 function loadAndPlayVideo(videoId, index = -1) {
     if (!videoId) return;
     document.getElementById('yt-wrapper').style.display = 'flex';
-    
     if (index !== -1) currentQueueIndex = index;
-    
     if (ytPlayer && typeof ytPlayer.loadVideoById === 'function') {
         ytPlayer.loadVideoById(videoId);
     } else {
@@ -681,12 +673,8 @@ function loadAndPlayVideo(videoId, index = -1) {
 function queueVideo(videoId, broadcast = true) {
     if (!videoId) return;
     ytQueue.push({ id: videoId, title: `Video (${videoId})` });
-    
-    if (currentQueueIndex === -1) {
-        playNextInQueue();
-    } else {
-        renderQueueUI();
-    }
+    if (currentQueueIndex === -1) playNextInQueue();
+    else renderQueueUI();
 
     if (broadcast && socket.readyState === WebSocket.OPEN) {
         socket.send(JSON.stringify({ action: 'yt_queue_add', videoId: videoId }));
@@ -696,9 +684,7 @@ function queueVideo(videoId, broadcast = true) {
 function playNextInQueue() {
     if (ytQueue.length === 0) return;
     currentQueueIndex++;
-    if (currentQueueIndex >= ytQueue.length) {
-        currentQueueIndex = 0; // Loop or stop
-    }
+    if (currentQueueIndex >= ytQueue.length) currentQueueIndex = 0; 
     loadAndPlayVideo(ytQueue[currentQueueIndex].id, currentQueueIndex);
 }
 
@@ -734,15 +720,11 @@ window.jumpToQueue = function(index) {
 
 window.removeFromQueue = function(index) {
     ytQueue.splice(index, 1);
-    if (index === currentQueueIndex) {
-        playNextInQueue();
-    } else if (index < currentQueueIndex) {
-        currentQueueIndex--;
-    }
+    if (index === currentQueueIndex) playNextInQueue();
+    else if (index < currentQueueIndex) currentQueueIndex--;
     renderQueueUI();
 };
 
-// Button Event Listeners
 document.getElementById('yt-queue-add-btn').addEventListener('click', () => {
     const url = document.getElementById('yt-url-input').value;
     const vidId = extractYouTubeId(url);
@@ -750,9 +732,7 @@ document.getElementById('yt-queue-add-btn').addEventListener('click', () => {
         queueVideo(vidId, true);
         document.getElementById('yt-url-input').value = '';
         addChatLine('System', `➕ Added video to queue`, true);
-    } else {
-        alert("Invalid YouTube Link!");
-    }
+    } else alert("Invalid YouTube Link!");
 });
 
 document.getElementById('yt-play-btn').addEventListener('click', () => {
@@ -765,16 +745,12 @@ document.getElementById('yt-play-btn').addEventListener('click', () => {
             socket.send(JSON.stringify({ action: 'yt_load', videoId: vidId }));
         }
         document.getElementById('yt-url-input').value = '';
-    } else {
-        alert("Invalid YouTube Link!");
-    }
+    } else alert("Invalid YouTube Link!");
 });
 
 document.getElementById('yt-skip-btn').addEventListener('click', () => {
     playNextInQueue();
-    if (socket.readyState === WebSocket.OPEN) {
-        socket.send(JSON.stringify({ action: 'yt_skip' }));
-    }
+    if (socket.readyState === WebSocket.OPEN) socket.send(JSON.stringify({ action: 'yt_skip' }));
 });
 
 document.getElementById('toggle-queue-btn').addEventListener('click', () => {
@@ -786,7 +762,7 @@ document.getElementById('yt-playpause-btn').addEventListener('click', () => {
     if (!ytPlayer || typeof ytPlayer.getPlayerState !== 'function') return;
     if (ytPlayer.getPlayerState() === YT.PlayerState.PLAYING) {
         ytPlayer.pauseVideo();
-        if (socket.readyState === WebSocket.OPEN) socket.send(JSON.stringify({ action: 'yt_skip' })); // or pause action
+        if (socket.readyState === WebSocket.OPEN) socket.send(JSON.stringify({ action: 'yt_pause' })); 
     } else {
         ytPlayer.playVideo();
         if (socket.readyState === WebSocket.OPEN) socket.send(JSON.stringify({ action: 'yt_play' }));
@@ -796,6 +772,55 @@ document.getElementById('yt-playpause-btn').addEventListener('click', () => {
 document.getElementById('toggle-yt-view').addEventListener('click', () => {
     const wrapper = document.getElementById('yt-wrapper');
     wrapper.style.display = (wrapper.style.display === 'none') ? 'flex' : 'none';
+});
+
+// ==========================================
+// SOUNDBOARD SYSTEM
+// ==========================================
+window.activeSounds = [];
+document.getElementById('add-sound-btn').addEventListener('click', () => document.getElementById('add-sound-upload').click());
+
+document.getElementById('add-sound-upload').addEventListener('change', (event) => {
+    const file = event.target.files[0];
+    if (!file) return;
+    
+    const audioUrl = URL.createObjectURL(file);
+    const tempAudio = new Audio(audioUrl);
+    
+    tempAudio.onloadedmetadata = () => {
+        if (tempAudio.duration > 5) return alert(`Error: Audio must be 5 seconds or less.`);
+        
+        const btn = document.createElement('button');
+        btn.textContent = file.name.split('.')[0]; 
+        btn.className = 'secondary-btn';
+        
+        btn.onclick = () => {
+            const effectAudio = new Audio(audioUrl);
+            window.activeSounds.push(effectAudio);
+            effectAudio.onended = () => window.activeSounds = window.activeSounds.filter(a => a !== effectAudio);
+
+            const outId = localStorage.getItem('appAudioOut');
+            if (outId && typeof effectAudio.setSinkId === 'function') effectAudio.setSinkId(outId).catch(()=>{});
+
+            if (audioCtx) {
+                const source = audioCtx.createMediaElementSource(effectAudio);
+                const effectsSlider = document.getElementById('effectsVolumeSlider');
+                const gainNode = audioCtx.createGain();
+                gainNode.gain.value = effectsSlider ? Math.min(parseFloat(effectsSlider.value), 1) : 1;
+                
+                source.connect(gainNode);
+                gainNode.connect(audioCtx.destination); 
+                gainNode.connect(soundboardDest);       
+            }
+            
+            effectAudio.play();
+            
+            if (socket.readyState === WebSocket.OPEN) {
+                socket.send(JSON.stringify({ action: 'sound_played', userId: myId, soundName: btn.textContent }));
+            }
+        };
+        document.getElementById('soundboard-buttons').appendChild(btn);
+    };
 });
 
 // ==========================================
@@ -927,47 +952,31 @@ window.onload = () => {
     populateDevices();
 };
 
-// Leave Room / Disconnect Logic
 document.getElementById('leave-room-btn').addEventListener('click', () => {
     Object.values(peers).forEach(pc => pc.close());
-    if (socket && socket.readyState === WebSocket.OPEN) {
-        socket.close();
-    }
+    if (socket && socket.readyState === WebSocket.OPEN) socket.close();
     if (localMicStream) localMicStream.getTracks().forEach(t => t.stop());
     if (localCamStream) localCamStream.getTracks().forEach(t => t.stop());
     if (localScreenStream) localScreenStream.getTracks().forEach(t => t.stop());
     window.location.href = 'index.html';
 });
 
-
-// ==========================================
-// 6. HYBRID RPG TABLETOP & DICE ENGINE
-// ==========================================
 // ==========================================
 // 6. RPG TABLETOP & DICE ENGINE (2D)
 // ==========================================
-
-// Epic Fireworks Generator for Max Rolls!
 function triggerFireworks() {
     if (typeof confetti !== 'undefined') {
         var duration = 2 * 1000;
         var end = Date.now() + duration;
 
         (function frame() {
-            confetti({
-                particleCount: 5, angle: 60, spread: 55, origin: { x: 0 },
-                colors: ['#10b981', '#fbbf24', '#ffffff'] // Emerald, Gold, White
-            });
-            confetti({
-                particleCount: 5, angle: 120, spread: 55, origin: { x: 1 },
-                colors: ['#10b981', '#fbbf24', '#ffffff']
-            });
+            confetti({ particleCount: 5, angle: 60, spread: 55, origin: { x: 0 }, colors: ['#10b981', '#fbbf24', '#ffffff'] });
+            confetti({ particleCount: 5, angle: 120, spread: 55, origin: { x: 1 }, colors: ['#10b981', '#fbbf24', '#ffffff'] });
             if (Date.now() < end) requestAnimationFrame(frame);
         }());
     }
 }
 
-// 2D CSS Fallback Animation with Number Scrambling
 function animateDiceRoll2D(results, shapeType) {
     const diceLayer = document.getElementById('dice-layer');
     if (!diceLayer) return;
@@ -996,14 +1005,10 @@ function animateDiceRoll2D(results, shapeType) {
         setTimeout(() => {
             clearInterval(scrambleInterval);
             textSpan.innerText = result;
-            
-            if (result === sides) {
-                triggerFireworks();
-            }
+            if (result === sides) triggerFireworks();
         }, 1000);
     });
 
-    // Fade out after 10 seconds
     setTimeout(() => {
         Array.from(diceLayer.children).forEach(child => {
             child.style.opacity = '0';
@@ -1013,7 +1018,6 @@ function animateDiceRoll2D(results, shapeType) {
     }, 10000); 
 }
 
-// Cryptographically Secure Roll Logic
 function rollDice(type, count = 1) {
     const results = [];
     const sides = parseInt(type.substring(1));
@@ -1033,7 +1037,6 @@ document.getElementById('roll-dice-btn').addEventListener('click', () => {
     const notation = `${count}${type}`;
     const currentName = document.getElementById('display-username').textContent;
     
-    // Execute 2D Roll directly
     const values = rollDice(type, count);
     animateDiceRoll2D(values, type);
     
@@ -1050,14 +1053,14 @@ document.getElementById('roll-dice-btn').addEventListener('click', () => {
     addChatLine('System', `🎲 You rolled ${values.join(', ')} (${notation})`, true);
 });
 
-// Toggle Token Menu
 document.getElementById('toggle-tokens-btn').addEventListener('click', () => {
     const panel = document.getElementById('floating-token-panel');
     panel.style.display = panel.style.display === 'none' ? 'block' : 'none';
 });
 
-// Tabletop State Variables
-// Tabletop State Variables
+// ==========================================
+// 7. CANVAS & TOKEN MANAGEMENT
+// ==========================================
 let canvas = null;
 let ctx = null;
 let isDrawing = false;
@@ -1066,10 +1069,6 @@ let lastY = 0;
 let activeToken = null;
 let tabletopContainer = null;
 
-// ==========================================
-// TOKEN DRAGGING (Global Listeners)
-// ==========================================
-// We bind these to the window exactly ONCE so they don't duplicate when switching tabs
 window.addEventListener('mousemove', (e) => {
     if (!activeToken || !tabletopContainer || !canvas) return;
     
@@ -1077,11 +1076,9 @@ window.addEventListener('mousemove', (e) => {
     let mouseX = e.clientX - rect.left;
     let mouseY = e.clientY - rect.top;
 
-    // Grid snapping (50x50 squares)
     let snapX = Math.floor(mouseX / 50) * 50 + 25;
     let snapY = Math.floor(mouseY / 50) * 50 + 25;
 
-    // Keep token safely inside canvas bounds
     snapX = Math.max(25, Math.min(canvas.width - 25, snapX));
     snapY = Math.max(25, Math.min(canvas.height - 25, snapY));
 
@@ -1099,13 +1096,8 @@ window.addEventListener('mousemove', (e) => {
     }
 });
 
-window.addEventListener('mouseup', () => {
-    activeToken = null; 
-});
+window.addEventListener('mouseup', () => { activeToken = null; });
 
-// ==========================================
-// CANVAS INITIALIZATION & INK TOOLS
-// ==========================================
 function initCanvas() {
     canvas = document.getElementById('shared-canvas');
     if (!canvas) return;
@@ -1115,7 +1107,6 @@ function initCanvas() {
     canvas.width = tabletopContainer.clientWidth;
     canvas.height = tabletopContainer.clientHeight;
     
-    // Ensure we only attach drawing listeners ONCE
     if (!canvas.dataset.initialized) {
         canvas.addEventListener('mousedown', startDrawing);
         canvas.addEventListener('mousemove', draw);
@@ -1198,17 +1189,11 @@ function stopDrawing() {
     }
 }
 
-// ==========================================
-// TOKEN MANAGEMENT
-// ==========================================
 function addTokenToLibrary(token) {
     const tokenLibrary = document.getElementById('token-library');
     const tokenEl = document.createElement('div');
     tokenEl.className = 'token-item';
-    tokenEl.innerHTML = `
-        <img src="${token.src}" alt="${token.name}" class="token-preview">
-        <div class="token-name">${token.name}</div>
-    `;
+    tokenEl.innerHTML = `<img src="${token.src}" alt="${token.name}" class="token-preview"><div class="token-name">${token.name}</div>`;
     tokenEl.onclick = () => placeTokenOnMap(token, true);
     tokenLibrary.appendChild(tokenEl);
 }
@@ -1234,16 +1219,14 @@ function placeTokenOnMap(token, broadcast = true) {
     delBtn.onclick = (e) => {
         e.stopPropagation();
         t.remove();
-        if (socket.readyState === WebSocket.OPEN) {
-            socket.send(JSON.stringify({action: 'token_remove', userId: myId, tokenId: token.id}));
-        }
+        if (socket.readyState === WebSocket.OPEN) socket.send(JSON.stringify({action: 'token_remove', userId: myId, tokenId: token.id}));
     };
 
     t.appendChild(delBtn);
     
     t.addEventListener('mousedown', (e) => {
         if (e.target === delBtn) return;
-        activeToken = t; // Locks the token in for the window mousemove listener
+        activeToken = t; 
     });
 
     document.getElementById('token-layer').appendChild(t);
@@ -1251,17 +1234,11 @@ function placeTokenOnMap(token, broadcast = true) {
     if (broadcast && socket.readyState === WebSocket.OPEN) {
         token.x = startX;
         token.y = startY;
-        socket.send(JSON.stringify({
-            action: 'token_add',
-            userId: myId,
-            token: token
-        }));
+        socket.send(JSON.stringify({ action: 'token_add', userId: myId, token: token }));
     }
 }
 
-document.getElementById('add-token-btn').addEventListener('click', () => {
-    document.getElementById('token-upload').click();
-});
+document.getElementById('add-token-btn').addEventListener('click', () => document.getElementById('token-upload').click());
 
 document.getElementById('token-upload').addEventListener('change', (event) => {
     const file = event.target.files[0];
