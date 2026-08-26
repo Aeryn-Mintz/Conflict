@@ -1,6 +1,7 @@
 const { app, BrowserWindow, ipcMain, desktopCapturer, session } = require('electron');
 const path = require('path');
 const http = require('http');
+const os = require('os'); // <--- ADD THIS LINE
 const fs = require('fs');
 const WebSocket = require('ws');
 const { spawn } = require('child_process');
@@ -15,6 +16,18 @@ let server = null;
 // Generates a 6-character alphanumeric share code (base36: 0-9, a-z)
 function generateShareCode() {
     return Math.random().toString(36).substring(2, 8);
+}
+// Finds your Local Network IP address (e.g., 192.168.1.15)
+function getLocalIp() {
+    const interfaces = os.networkInterfaces();
+    for (const name of Object.keys(interfaces)) {
+        for (const iface of interfaces[name]) {
+            if (iface.family === 'IPv4' && !iface.internal) {
+                return iface.address;
+            }
+        }
+    }
+    return '127.0.0.1';
 }
 function createWindow() {
     // 1. Create a local HTTP server so files load via http://localhost (Fixes file:// origin restrictions)
@@ -62,6 +75,12 @@ function createWindow() {
         });
     });
 
+  server.on('error', (e) => {
+        if (e.code === 'EADDRINUSE') {
+            console.log("App is already running! Launching secondary client window.");
+        }
+    });
+    
     server.listen(8080);
 
     mainWindow = new BrowserWindow({
@@ -123,81 +142,37 @@ app.on('window-all-closed', () => {
     if (process.platform !== 'darwin') app.quit();
 });
 ipcMain.on('start-host', async (event) => {
+    let tunnel = null;
+    let shareCode = null;
+    const lanIp = `${getLocalIp()}:8080`;
+
     try {
-        let tunnel = null;
-        let shareCode = null;
-        const maxAttempts = 5;
-        
-        // Try up to 5 times to get our preferred subdomain format
+        const maxAttempts = 3;
         for (let i = 0; i < maxAttempts && !tunnel; i++) {
             const code = generateShareCode();
-            
             try {
-                // Try our preferred format: conflict-<code>
                 tunnel = await new Promise((resolve, reject) => {
-                    localtunnel({ 
-                        port: 8080, 
-                        subdomain: `conflict-${code}` 
-                    }, (err, t) => {
-                        if (err) reject(err);
-                        else resolve(t);
+                    localtunnel({ port: 8080, subdomain: `conflict-${code}` }, (err, t) => {
+                        if (err) reject(err); else resolve(t);
                     });
                 });
-                shareCode = code; // We know this code worked
-            } catch (err) {
-                try {
-                    // Fallback: just <code> as subdomain
-                    tunnel = await new Promise((resolve, reject) => {
-                        localtunnel({ 
-                            port: 8080, 
-                            subdomain: code 
-                        }, (err, t) => {
-                            if (err) reject(err);
-                            else resolve(t);
-                        });
-                    });
-                    shareCode = code; // We know this code worked
-                } catch (err2) {
-                    // Both formats failed, try next code
-                    continue;
-                }
-            }
+                shareCode = code; 
+            } catch (err) { continue; }
         }
-        
-        // If we still don't have a tunnel after 5 attempts, let localtunnel choose
-        if (!tunnel) {
-            tunnel = await new Promise((resolve, reject) => {
-                localtunnel({ port: 8080 }, (err, t) => {
-                    if (err) reject(err);
-                    else resolve(t);
-                });
-            });
-            // Extract a share code from the random subdomain (best effort)
-            try {
-                const url = new URL(tunnel.url);
-                const hostname = url.hostname;
-                // Extract alphanumeric sequence from subdomain
-                const match = hostname.match(/[a-z0-9]+/i);
-                shareCode = match ? match[0].substring(0, 6).toLowerCase() : 
-                           Math.random().toString(36).substring(2, 8);
-            } catch (e) {
-                shareCode = generateShareCode(); // Last resort
-            }
-        }
-        
-        // Send results to renderer
-        event.reply('host-started', {
-            fullUrl: tunnel.url,
-            shareCode: shareCode // What to share with friends (6-char alphanumeric)
-        });
-        
-        // Store tunnel reference for cleanup
+    } catch (err) {
+        console.log("No internet or Localtunnel failed. Falling back to Offline LAN Mode.");
+    }
+
+    // Send results to renderer (tunnel might be null if offline!)
+    event.reply('host-started', {
+        fullUrl: tunnel ? tunnel.url : null,
+        shareCode: shareCode,
+        lanIp: lanIp // Always send the local IP
+    });
+    
+    if (tunnel) {
         tunnelProcess = tunnel;
         tunnel.on('close', () => console.log('Localtunnel closed'));
-        
-    } catch (err) {
-        console.error("Hosting failed:", err);
-        event.reply('host-failed', err.message);
     }
 });
 
