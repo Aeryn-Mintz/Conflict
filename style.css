@@ -586,3 +586,75 @@ input[type="text"]:focus, input[type="number"]:focus { border-color: var(--accen
         box-shadow: 0 6px 12px rgba(0,0,0,0.5); 
     }
 }
+/* --- NATIVE CHARACTER SHEETS STYLING --- */
+.sheet-row { display: flex; gap: 15px; flex-wrap: wrap; width: 100%; }
+.sheet-col { display: flex; flex-direction: column; flex-grow: 1; }
+.sheet-box { background: rgba(0,0,0,0.3); border: 1px solid var(--border-color); padding: 15px; border-radius: 8px; }
+.sheet-box h4 { margin: 0 0 10px 0; color: var(--accent-main); text-transform: uppercase; font-size: 11px; letter-spacing: 1px; }
+
+.sheet-input, .sheet-textarea {
+    background: transparent;
+    border: none;
+    border-bottom: 1px dashed var(--border-color);
+    color: var(--text-main);
+    padding: 8px 4px;
+    font-size: 14px;
+    outline: none;
+    width: 100%;
+    box-sizing: border-box;
+}
+.sheet-input:focus, .sheet-textarea:focus { border-bottom: 1px solid var(--accent-main); }
+.sheet-textarea { resize: vertical; min-height: 80px; border: 1px solid var(--border-color); border-radius: 4px; padding: 8px; }
+
+.stat-circle {
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    width: 60px; height: 60px; border-radius: 50%; border: 2px solid var(--border-color);
+    background: rgba(0,0,0,0.4);
+}
+.stat-circle input { text-align: center; border: none; font-size: 18px; font-weight: bold; width: 40px; padding: 0; margin-top: 4px; }
+.stat-circle label { font-size: 9px; text-transform: uppercase; color: var(--text-muted); }
+/* Hide the ugly default scrollbar inside the VTT area */
+#vtt-scroll-area::-webkit-scrollbar { display: none; }
+
+/* Expanded Character Sheet Styling */
+.sheet-stat-box {
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    background: rgba(0,0,0,0.4); border: 1px solid var(--border-color); border-radius: 6px; padding: 10px;
+}
+.sheet-stat-box label { font-size: 10px; color: var(--text-muted); text-transform: uppercase; margin-bottom: 5px; font-weight: bold; }
+.sheet-stat-box input { width: 100%; text-align: center; font-size: 16px; font-weight: bold; background: transparent; border: none; outline: none; color: var(--text-main); }
+.sheet-stat-box input:focus { color: var(--accent-main); }
+
+.attr-row { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
+.attr-box { width: 50px; height: 50px; border-radius: 8px; border: 2px solid var(--border-color); display: flex; flex-direction: column; align-items: center; justify-content: center; background: rgba(0,0,0,0.5); }
+.attr-box label { font-size: 8px; color: var(--text-muted); font-weight: bold; }
+.attr-box input { width: 30px; text-align: center; border: none; background: transparent; color: white; font-weight: bold; font-size: 16px; outline: none; }
+/* Highly Detailed Character Sheet Elements */
+.skills-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(135px, 1fr));
+    gap: 8px;
+    margin-top: 10px;
+}
+.skill-item {
+    display: flex; align-items: center; justify-content: space-between;
+    background: rgba(0,0,0,0.4); padding: 4px 8px; border-radius: 4px; border: 1px solid rgba(255,255,255,0.05);
+    font-size: 11px;
+}
+.skill-item input { width: 28px; text-align: center; border: none; border-bottom: 1px solid var(--text-muted); background: transparent; color: var(--text-main); font-weight: bold; outline: none; }
+.skill-item input:focus { border-color: var(--accent-main); color: var(--accent-main); }
+/* Proficiency Checkboxes */
+.prof-toggle {
+    appearance: none;
+    width: 12px; height: 12px;
+    border-radius: 50%;
+    border: 2px solid var(--text-muted);
+    cursor: pointer;
+    margin-right: 5px;
+    outline: none;
+}
+.prof-toggle:checked {
+    background-color: var(--accent-main);
+    border-color: var(--accent-main);
+}
+.skill-item span { display: flex; align-items: center; }

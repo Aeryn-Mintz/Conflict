@@ -1,5 +1,11 @@
 const { ipcRenderer } = require('electron');
+const fs = require('fs');
+const path = require('path');
+const os = require('os');
 
+// Define a secure, unlimited save location on the user's hard drive 
+// (e.g., C:\Users\YourName\.conflict_vtt_map.txt)
+const mapSavePath = path.join(os.homedir(), '.conflict_vtt_map.txt');
 // ==========================================
 // 1. WEBSOCKET & WEBRTC ENGINE
 // ==========================================
@@ -31,21 +37,27 @@ let localCamStream = null;
 let currentView = 'main';
 
 // Tab Switching
+// Tab Switching
 document.querySelectorAll('.tab-btn').forEach(btn => {
     btn.addEventListener('click', () => {
         document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
         btn.classList.add('active');
         
         const tabId = btn.dataset.tab;
+        document.getElementById('main-view').style.display = 'none';
+        document.getElementById('rpg-view').style.display = 'none';
+        document.getElementById('sheets-view').style.display = 'none';
+        
         if (tabId === 'main') {
             document.getElementById('main-view').style.display = 'flex';
-            document.getElementById('rpg-view').style.display = 'none';
             currentView = 'main';
         } else if (tabId === 'rpg') {
-            document.getElementById('main-view').style.display = 'none';
             document.getElementById('rpg-view').style.display = 'flex';
             currentView = 'rpg';
             initCanvas(); 
+        } else if (tabId === 'sheets') {
+            document.getElementById('sheets-view').style.display = 'flex';
+            currentView = 'sheets';
         }
     });
 });
@@ -140,6 +152,50 @@ socket.onmessage = async (event) => {
             const answer = await pc.createAnswer();
             await pc.setLocalDescription(answer);
             socket.send(JSON.stringify({ action: 'answer', userId: myId, targetId: data.userId, answer: answer }));
+        }
+        else if (data.action === 'set_map_bg') {
+            document.getElementById('tabletop-container').style.backgroundImage = `url(${data.image})`;
+        }
+        else if (data.action === 'claim_dm') {
+            addChatLine('System', `👑 ${data.username} is now the Dungeon Master.`, true);
+            const dmBtn = document.getElementById('claim-dm-btn');
+            // If someone else claimed it, lock the button
+            if (data.userId !== myId) {
+                dmBtn.innerText = `👑 DM: ${data.username}`;
+                dmBtn.disabled = true;
+                dmBtn.style.borderColor = "var(--border-color)";
+                dmBtn.style.color = "var(--text-muted)";
+            }
+        }
+        else if (data.action === 'release_dm') {
+            addChatLine('System', `👑 The Dungeon Master role is now open.`, true);
+            const dmBtn = document.getElementById('claim-dm-btn');
+            dmBtn.innerText = `👑 Claim DM`;
+            dmBtn.disabled = false;
+            dmBtn.style.borderColor = "#fbbf24";
+            dmBtn.style.color = "#fbbf24";
+        }
+
+        else if (data.action === 'toggle_fog') {
+            const fog = document.getElementById('fog-canvas');
+            if (fog) {
+                if (data.enabled) {
+                    fog.style.display = 'block';
+                    const fCtx = fog.getContext('2d');
+                    fCtx.fillStyle = '#000000';
+                    fCtx.fillRect(0, 0, fog.width, fog.height);
+                } else {
+                    fog.style.display = 'none';
+                }
+            }
+        }
+        else if (data.action === 'fog_reveal' && data.userId !== myId) {
+            if (fogCtx) {
+                fogCtx.globalCompositeOperation = 'destination-out';
+                fogCtx.beginPath();
+                fogCtx.arc(data.x, data.y, data.radius, 0, Math.PI * 2);
+                fogCtx.fill();
+            }
         }
         else if (data.action === 'answer' && data.targetId === myId) {
             if (peers[data.userId]) {
@@ -1059,40 +1115,133 @@ document.getElementById('toggle-tokens-btn').addEventListener('click', () => {
 });
 
 // ==========================================
-// 7. CANVAS & TOKEN MANAGEMENT
+// 7. VTT ENGINE: CANVAS, TOKENS, FOG & DM
 // ==========================================
-let canvas = null;
-let ctx = null;
-let isDrawing = false;
-let lastX = 0;
-let lastY = 0;
-let activeToken = null;
-let tabletopContainer = null;
+let canvas = null, ctx = null, fogCanvas = null, fogCtx = null;
+let isDrawing = false, lastX = 0, lastY = 0, activeToken = null;
+let isDM = false;
+
+// Middle-Mouse Panning Variables
+let isPanning = false;
+let startPanX = 0, startPanY = 0, startScrollLeft = 0, startScrollTop = 0;
+
+// VTT Map & Scroll Containers
+const scrollArea = document.getElementById('vtt-scroll-area');
+const mapLayer = document.getElementById('vtt-map-layer');
+
+// Middle-Mouse Scroll Logic
+scrollArea.addEventListener('mousedown', (e) => {
+    if (e.button === 1) { // Middle Mouse Button
+        isPanning = true;
+        startPanX = e.clientX;
+        startPanY = e.clientY;
+        startScrollLeft = scrollArea.scrollLeft;
+        startScrollTop = scrollArea.scrollTop;
+        scrollArea.style.cursor = 'grabbing';
+        e.preventDefault(); 
+    }
+});
+window.addEventListener('mousemove', (e) => {
+    if (isPanning) {
+        scrollArea.scrollLeft = startScrollLeft - (e.clientX - startPanX);
+        scrollArea.scrollTop = startScrollTop - (e.clientY - startPanY);
+    }
+});
+window.addEventListener('mouseup', (e) => {
+    if (e.button === 1) {
+        isPanning = false;
+        scrollArea.style.cursor = 'grab';
+    }
+});
+
+// DM Logic & Infinite Map Storage
+document.getElementById('claim-dm-btn').addEventListener('click', (e) => {
+    isDM = !isDM;
+    const btn = e.target;
+    const controls = document.getElementById('dm-controls');
+    const fogBrush = document.getElementById('fog-brush-tool');
+    const fogCanvasLayer = document.getElementById('fog-canvas');
+    const currentName = document.getElementById('display-username').textContent;
+    
+    if (isDM) {
+        btn.innerText = "👑 Release DM";
+        btn.style.background = "#fbbf24";
+        btn.style.color = "#000";
+        controls.style.display = "flex";
+        fogBrush.style.display = "block";
+        if (fogCanvasLayer) fogCanvasLayer.style.opacity = "0.5";
+        
+        if (fs.existsSync(mapSavePath)) document.getElementById('restore-map-btn').style.display = "block";
+        if (socket.readyState === WebSocket.OPEN) socket.send(JSON.stringify({action: 'claim_dm', userId: myId, username: currentName}));
+    } else {
+        btn.innerText = "👑 Claim DM";
+        btn.style.background = "transparent";
+        btn.style.color = "#fbbf24";
+        controls.style.display = "none";
+        fogBrush.style.display = "none";
+        if (fogCanvasLayer) fogCanvasLayer.style.opacity = "1.0";
+        setTool('pen'); 
+        if (socket.readyState === WebSocket.OPEN) socket.send(JSON.stringify({action: 'release_dm', userId: myId, username: currentName}));
+    }
+});
+
+document.getElementById('restore-map-btn').addEventListener('click', () => {
+    if (fs.existsSync(mapSavePath)) {
+        try {
+            const savedMap = fs.readFileSync(mapSavePath, 'utf-8');
+            mapLayer.style.backgroundImage = `url(${savedMap})`;
+            if (socket.readyState === WebSocket.OPEN) socket.send(JSON.stringify({action: 'set_map_bg', image: savedMap}));
+            addChatLine('System', "🗺️ Map restored from hard drive.", true);
+        } catch (error) { console.error("Failed to read map file:", error); }
+    }
+});
+
+document.getElementById('map-upload-btn').addEventListener('click', () => document.getElementById('map-file-input').click());
+document.getElementById('map-file-input').addEventListener('change', (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (event) => {
+        const bgData = event.target.result;
+        mapLayer.style.backgroundImage = `url(${bgData})`;
+        try {
+            fs.writeFileSync(mapSavePath, bgData, 'utf-8');
+            document.getElementById('restore-map-btn').style.display = "block";
+        } catch (error) { console.error("Failed to save map:", error); }
+        if (socket.readyState === WebSocket.OPEN) socket.send(JSON.stringify({action: 'set_map_bg', image: bgData}));
+    };
+    reader.readAsDataURL(file);
+});
+
+document.getElementById('toggle-fog-btn').addEventListener('click', (e) => {
+    const fog = document.getElementById('fog-canvas');
+    if (fog.style.display !== 'none') {
+        fog.style.display = 'none';
+        e.target.innerText = "🌫️ Enable Fog";
+        if (socket.readyState === WebSocket.OPEN) socket.send(JSON.stringify({action: 'toggle_fog', enabled: false}));
+    } else {
+        fog.style.display = 'block';
+        fogCtx.fillStyle = '#000000';
+        fogCtx.fillRect(0, 0, fog.width, fog.height);
+        e.target.innerText = "🌫️ Disable Fog";
+        if (socket.readyState === WebSocket.OPEN) socket.send(JSON.stringify({action: 'toggle_fog', enabled: true}));
+    }
+});
 
 window.addEventListener('mousemove', (e) => {
-    if (!activeToken || !tabletopContainer || !canvas) return;
-    
-    const rect = tabletopContainer.getBoundingClientRect();
+    if (!activeToken || !mapLayer || !canvas) return;
+    const rect = mapLayer.getBoundingClientRect(); // Map layer rect calculates scroll offset automatically!
     let mouseX = e.clientX - rect.left;
     let mouseY = e.clientY - rect.top;
 
     let snapX = Math.floor(mouseX / 50) * 50 + 25;
     let snapY = Math.floor(mouseY / 50) * 50 + 25;
 
-    snapX = Math.max(25, Math.min(canvas.width - 25, snapX));
-    snapY = Math.max(25, Math.min(canvas.height - 25, snapY));
-
-    activeToken.style.left = snapX + 'px';
-    activeToken.style.top = snapY + 'px';
+    activeToken.style.left = Math.max(25, Math.min(canvas.width - 25, snapX)) + 'px';
+    activeToken.style.top = Math.max(25, Math.min(canvas.height - 25, snapY)) + 'px';
 
     if (socket && socket.readyState === WebSocket.OPEN) {
-        socket.send(JSON.stringify({
-            action: 'token_move',
-            userId: myId,
-            tokenId: activeToken.id.replace('map-token-', ''),
-            x: snapX,
-            y: snapY
-        }));
+        socket.send(JSON.stringify({ action: 'token_move', userId: myId, tokenId: activeToken.id.replace('map-token-', ''), x: snapX, y: snapY }));
     }
 });
 
@@ -1100,31 +1249,38 @@ window.addEventListener('mouseup', () => { activeToken = null; });
 
 function initCanvas() {
     canvas = document.getElementById('shared-canvas');
-    if (!canvas) return;
+    fogCanvas = document.getElementById('fog-canvas');
+    if (!canvas || !fogCanvas) return;
     ctx = canvas.getContext('2d');
+    fogCtx = fogCanvas.getContext('2d');
     
-    tabletopContainer = document.getElementById('tabletop-container');
-    canvas.width = tabletopContainer.clientWidth;
-    canvas.height = tabletopContainer.clientHeight;
+    // Set map to massive 3000x3000 size
+    canvas.width = 3000; canvas.height = 3000;
+    fogCanvas.width = 3000; fogCanvas.height = 3000;
+    
+    // Center the viewport on initialization
+    setTimeout(() => {
+        scrollArea.scrollLeft = 1500 - (scrollArea.clientWidth / 2);
+        scrollArea.scrollTop = 1500 - (scrollArea.clientHeight / 2);
+    }, 100);
     
     if (!canvas.dataset.initialized) {
-        canvas.addEventListener('mousedown', startDrawing);
-        canvas.addEventListener('mousemove', draw);
-        canvas.addEventListener('mouseup', stopDrawing);
-        canvas.addEventListener('mouseout', stopDrawing);
+        mapLayer.addEventListener('mousedown', startDrawing);
+        mapLayer.addEventListener('mousemove', draw);
+        mapLayer.addEventListener('mouseup', stopDrawing);
+        mapLayer.addEventListener('mouseout', stopDrawing);
         
         document.getElementById('pen-tool').addEventListener('click', () => setTool('pen'));
         document.getElementById('eraser-tool').addEventListener('click', () => setTool('eraser'));
+        document.getElementById('fog-brush-tool').addEventListener('click', () => setTool('fog-brush'));
         document.getElementById('clear-canvas-btn').addEventListener('click', () => {
-            if (confirm('Clear the ink? (Tokens will remain)')) {
+            if (confirm('Clear the ink?')) {
                 ctx.clearRect(0, 0, canvas.width, canvas.height);
                 if (socket.readyState === WebSocket.OPEN) socket.send(JSON.stringify({action: 'canvas_clear', userId: myId}));
             }
         });
-        
         document.getElementById('stroke-color').addEventListener('change', updateStrokeStyle);
         document.getElementById('stroke-width').addEventListener('input', updateStrokeWidth);
-        
         canvas.dataset.initialized = "true";
     }
 }
@@ -1143,11 +1299,12 @@ function setTool(tool) {
 function updateStrokeStyle(e) { strokeColor = e.target.value; if (ctx) ctx.strokeStyle = strokeColor; }
 function updateStrokeWidth(e) { 
     strokeWidth = parseInt(e.target.value); 
-    if (ctx) {
-        ctx.lineWidth = strokeWidth; 
-        ctx.lineCap = 'round'; 
-        ctx.lineJoin = 'round'; 
-    }
+    if (ctx) { ctx.lineWidth = strokeWidth; ctx.lineCap = 'round'; ctx.lineJoin = 'round'; }
+}
+
+function getMousePosition(e) {
+    const rect = canvas.getBoundingClientRect();
+    return [e.clientX - rect.left, e.clientY - rect.top];
 }
 
 function getMousePosition(e) {
@@ -1156,62 +1313,82 @@ function getMousePosition(e) {
 }
 
 function startDrawing(e) {
+    // FIX: Only allow drawing if it is a Left-Click! (Middle click is 1, Right click is 2)
+    if (e.button !== 0) return; 
+
+    // Don't draw if clicking on a UI element
+    if (e.target.tagName === 'BUTTON' || e.target.tagName === 'INPUT' || activeToken) return;
     isDrawing = true;
     [lastX, lastY] = getMousePosition(e);
+    
+    // Single click fog reveal
+    if (currentTool === 'fog-brush' && isDM && fogCtx) {
+        revealFog(lastX, lastY);
+    }
+}
+
+function revealFog(x, y) {
+    fogCtx.globalCompositeOperation = 'destination-out';
+    fogCtx.beginPath();
+    fogCtx.arc(x, y, strokeWidth * 3, 0, Math.PI * 2);
+    fogCtx.fill();
+    if (socket.readyState === WebSocket.OPEN) {
+        socket.send(JSON.stringify({ action: 'fog_reveal', userId: myId, x: x, y: y, radius: strokeWidth * 3 }));
+    }
 }
 
 function draw(e) {
-    if (!isDrawing || !ctx) return;
+    if (!isDrawing) return;
     const [currentX, currentY] = getMousePosition(e);
     
-    ctx.beginPath();
-    ctx.moveTo(lastX, lastY);
-    ctx.lineTo(currentX, currentY);
-    ctx.strokeStyle = strokeColor;
-    ctx.lineWidth = strokeWidth;
-    ctx.stroke();
-    
-    if (socket.readyState === WebSocket.OPEN) {
-        socket.send(JSON.stringify({
-            action: 'canvas_draw', userId: myId,
-            x0: lastX, y0: lastY, x1: currentX, y1: currentY,
-            color: strokeColor, width: strokeWidth
-        }));
+    if (currentTool === 'fog-brush') {
+        if (isDM && fogCtx) revealFog(currentX, currentY);
+    } else if (ctx) {
+        ctx.beginPath();
+        ctx.moveTo(lastX, lastY);
+        ctx.lineTo(currentX, currentY);
+        ctx.strokeStyle = strokeColor;
+        ctx.lineWidth = strokeWidth;
+        ctx.stroke();
+        
+        if (socket.readyState === WebSocket.OPEN) {
+            socket.send(JSON.stringify({ action: 'canvas_draw', userId: myId, x0: lastX, y0: lastY, x1: currentX, y1: currentY, color: strokeColor, width: strokeWidth }));
+        }
     }
     [lastX, lastY] = [currentX, currentY];
 }
 
 function stopDrawing() {
-    if (isDrawing && ctx) {
+    if (isDrawing && ctx && currentTool !== 'fog-brush') {
         ctx.stroke();
         ctx.beginPath();
-        isDrawing = false;
     }
+    isDrawing = false;
 }
 
-function addTokenToLibrary(token) {
+function addTokenToLibrary(asset) {
     const tokenLibrary = document.getElementById('token-library');
     const tokenEl = document.createElement('div');
     tokenEl.className = 'token-item';
-    tokenEl.innerHTML = `<img src="${token.src}" alt="${token.name}" class="token-preview"><div class="token-name">${token.name}</div>`;
-    tokenEl.onclick = () => placeTokenOnMap(token, true);
+    tokenEl.innerHTML = `<img src="${asset.src}" alt="${asset.name}" class="token-preview"><div class="token-name">${asset.name}</div>`;
+    tokenEl.onclick = () => placeTokenOnMap(asset, true);
     tokenLibrary.appendChild(tokenEl);
 }
 
-function placeTokenOnMap(token, broadcast = true) {
-    if (document.getElementById('map-token-' + token.id)) return;
+function placeTokenOnMap(asset, broadcast = true) {
+    if (document.getElementById('map-token-' + asset.id)) return;
 
     const t = document.createElement('div');
-    t.id = 'map-token-' + token.id;
+    t.id = 'map-token-' + asset.id;
     t.className = 'map-token';
     
-    const container = document.getElementById('tabletop-container');
-    let startX = Math.floor((container.clientWidth / 2) / 50) * 50 + 25;
-    let startY = Math.floor((container.clientHeight / 2) / 50) * 50 + 25;
+    const scrollArea = document.getElementById('vtt-scroll-area');
+    let startX = Math.floor((scrollArea.scrollLeft + scrollArea.clientWidth / 2) / 50) * 50 + 25;
+    let startY = Math.floor((scrollArea.scrollTop + scrollArea.clientHeight / 2) / 50) * 50 + 25;
     
-    t.style.left = (token.x || startX) + 'px';
-    t.style.top = (token.y || startY) + 'px';
-    t.style.backgroundImage = `url(${token.src})`;
+    t.style.left = (asset.x || startX) + 'px';
+    t.style.top = (asset.y || startY) + 'px';
+    t.style.backgroundImage = `url(${asset.src})`;
 
     const delBtn = document.createElement('div');
     delBtn.className = 'token-delete';
@@ -1219,7 +1396,7 @@ function placeTokenOnMap(token, broadcast = true) {
     delBtn.onclick = (e) => {
         e.stopPropagation();
         t.remove();
-        if (socket.readyState === WebSocket.OPEN) socket.send(JSON.stringify({action: 'token_remove', userId: myId, tokenId: token.id}));
+        if (socket.readyState === WebSocket.OPEN) socket.send(JSON.stringify({action: 'token_remove', userId: myId, tokenId: asset.id}));
     };
 
     t.appendChild(delBtn);
@@ -1229,12 +1406,13 @@ function placeTokenOnMap(token, broadcast = true) {
         activeToken = t; 
     });
 
+    // Always append to the token layer
     document.getElementById('token-layer').appendChild(t);
 
     if (broadcast && socket.readyState === WebSocket.OPEN) {
-        token.x = startX;
-        token.y = startY;
-        socket.send(JSON.stringify({ action: 'token_add', userId: myId, token: token }));
+        asset.x = startX;
+        asset.y = startY;
+        socket.send(JSON.stringify({ action: 'token_add', userId: myId, token: asset }));
     }
 }
 
@@ -1246,12 +1424,440 @@ document.getElementById('token-upload').addEventListener('change', (event) => {
     
     const reader = new FileReader();
     reader.onload = (e) => {
-        const token = {
+        const asset = {
             id: Math.random().toString(36).substring(2, 9),
             name: file.name.split('.')[0],
-            src: e.target.result
+            src: e.target.result,
+            type: 'token' // Forced token type
         };
-        addTokenToLibrary(token);
+        addTokenToLibrary(asset);
     };
     reader.readAsDataURL(file);
 });
+// ==========================================
+// 8. NATIVE CHARACTER SHEETS & AUTO-SAVE
+// ==========================================
+let saveTimeout;
+
+const sheetBlueprints = {
+    dnd: `
+        <div class="sheet-row">
+            <input type="text" class="sheet-input dyn-save" data-key="name" placeholder="Character Name" style="font-size: 22px; font-weight: bold; flex: 2; color: var(--accent-main);">
+            <input type="text" class="sheet-input dyn-save" data-key="class" placeholder="Class & Level" style="flex: 1;">
+            <input type="text" class="sheet-input dyn-save" data-key="race" placeholder="Race & Background" style="flex: 1;">
+        </div>
+        <div class="sheet-row" style="margin-top: 15px;">
+            <div class="sheet-col" style="flex: 2;">
+                <div class="sheet-row" style="gap: 10px; margin-bottom: 15px;">
+                    <div class="sheet-stat-box" style="flex: 1;"><label>Armor Class</label><input type="text" class="dyn-save" data-key="ac"></div>
+                    <div class="sheet-stat-box" style="flex: 1;"><label>Initiative</label><input type="text" class="dyn-save" data-key="init"></div>
+                    <div class="sheet-stat-box" style="flex: 1;"><label>Speed</label><input type="text" class="dyn-save" data-key="speed"></div>
+                    <div class="sheet-stat-box" style="flex: 1;"><label>Prof Bonus</label><input type="text" class="dyn-save" data-key="prof" id="dnd-prof" value="2"></div>
+                </div>
+                <div class="sheet-row" style="gap: 10px; margin-bottom: 15px;">
+                    <div class="sheet-stat-box" style="flex: 2;"><label>Current Hit Points</label><input type="text" class="dyn-save" data-key="hp" placeholder="Max / Current" style="font-size: 22px;"></div>
+                    <div class="sheet-stat-box" style="flex: 1;"><label>Temp HP</label><input type="text" class="dyn-save" data-key="temp_hp"></div>
+                    <div class="sheet-stat-box" style="flex: 1;"><label>Hit Dice</label><input type="text" class="dyn-save" data-key="hit_dice"></div>
+                </div>
+                
+                <div class="sheet-box">
+                    <h4>Attacks & Spellcasting</h4>
+                    <textarea class="sheet-textarea dyn-save" data-key="attacks" style="min-height: 120px;" placeholder="Weapon | Atk Bonus | Damage/Type"></textarea>
+                </div>
+                <div class="sheet-box" style="margin-top: 15px;">
+                    <h4>Equipment & Gold</h4>
+                    <textarea class="sheet-textarea dyn-save" data-key="inventory" style="min-height: 100px;"></textarea>
+                </div>
+            </div>
+
+            <div class="sheet-col" style="flex: 3;">
+                <div class="sheet-box">
+                    <h4>Attributes & Saves</h4>
+                    <div style="display: flex; gap: 10px; justify-content: space-between; margin-bottom: 15px;">
+                        <div class="attr-box"><label>STR</label><input type="text" class="dyn-save dnd-attr" data-key="str" id="dnd-str" value="10"></div>
+                        <div class="attr-box"><label>DEX</label><input type="text" class="dyn-save dnd-attr" data-key="dex" id="dnd-dex" value="10"></div>
+                        <div class="attr-box"><label>CON</label><input type="text" class="dyn-save dnd-attr" data-key="con" id="dnd-con" value="10"></div>
+                        <div class="attr-box"><label>INT</label><input type="text" class="dyn-save dnd-attr" data-key="int" id="dnd-int" value="10"></div>
+                        <div class="attr-box"><label>WIS</label><input type="text" class="dyn-save dnd-attr" data-key="wis" id="dnd-wis" value="10"></div>
+                        <div class="attr-box"><label>CHA</label><input type="text" class="dyn-save dnd-attr" data-key="cha" id="dnd-cha" value="10"></div>
+                    </div>
+                    
+                    <h4>Skills</h4>
+                    <div class="skills-grid">
+                        <div class="skill-item"><span><input type="checkbox" class="prof-toggle dyn-save" data-key="prof_acro" data-attr="dex"> Acrobatics (Dex)</span><input type="text" class="dyn-save dnd-skill" data-key="sk_acro" readonly></div>
+                        <div class="skill-item"><span><input type="checkbox" class="prof-toggle dyn-save" data-key="prof_anim" data-attr="wis"> Animal Hand (Wis)</span><input type="text" class="dyn-save dnd-skill" data-key="sk_anim" readonly></div>
+                        <div class="skill-item"><span><input type="checkbox" class="prof-toggle dyn-save" data-key="prof_arca" data-attr="int"> Arcana (Int)</span><input type="text" class="dyn-save dnd-skill" data-key="sk_arca" readonly></div>
+                        <div class="skill-item"><span><input type="checkbox" class="prof-toggle dyn-save" data-key="prof_athl" data-attr="str"> Athletics (Str)</span><input type="text" class="dyn-save dnd-skill" data-key="sk_athl" readonly></div>
+                        <div class="skill-item"><span><input type="checkbox" class="prof-toggle dyn-save" data-key="prof_dece" data-attr="cha"> Deception (Cha)</span><input type="text" class="dyn-save dnd-skill" data-key="sk_dece" readonly></div>
+                        <div class="skill-item"><span><input type="checkbox" class="prof-toggle dyn-save" data-key="prof_hist" data-attr="int"> History (Int)</span><input type="text" class="dyn-save dnd-skill" data-key="sk_hist" readonly></div>
+                        <div class="skill-item"><span><input type="checkbox" class="prof-toggle dyn-save" data-key="prof_ins" data-attr="wis"> Insight (Wis)</span><input type="text" class="dyn-save dnd-skill" data-key="sk_ins" readonly></div>
+                        <div class="skill-item"><span><input type="checkbox" class="prof-toggle dyn-save" data-key="prof_inti" data-attr="cha"> Intimidation (Cha)</span><input type="text" class="dyn-save dnd-skill" data-key="sk_inti" readonly></div>
+                        <div class="skill-item"><span><input type="checkbox" class="prof-toggle dyn-save" data-key="prof_inv" data-attr="int"> Investigation (Int)</span><input type="text" class="dyn-save dnd-skill" data-key="sk_inv" readonly></div>
+                        <div class="skill-item"><span><input type="checkbox" class="prof-toggle dyn-save" data-key="prof_med" data-attr="wis"> Medicine (Wis)</span><input type="text" class="dyn-save dnd-skill" data-key="sk_med" readonly></div>
+                        <div class="skill-item"><span><input type="checkbox" class="prof-toggle dyn-save" data-key="prof_nat" data-attr="int"> Nature (Int)</span><input type="text" class="dyn-save dnd-skill" data-key="sk_nat" readonly></div>
+                        <div class="skill-item"><span><input type="checkbox" class="prof-toggle dyn-save" data-key="prof_perc" data-attr="wis"> Perception (Wis)</span><input type="text" class="dyn-save dnd-skill" data-key="sk_perc" readonly></div>
+                        <div class="skill-item"><span><input type="checkbox" class="prof-toggle dyn-save" data-key="prof_perf" data-attr="cha"> Performance (Cha)</span><input type="text" class="dyn-save dnd-skill" data-key="sk_perf" readonly></div>
+                        <div class="skill-item"><span><input type="checkbox" class="prof-toggle dyn-save" data-key="prof_pers" data-attr="cha"> Persuasion (Cha)</span><input type="text" class="dyn-save dnd-skill" data-key="sk_pers" readonly></div>
+                        <div class="skill-item"><span><input type="checkbox" class="prof-toggle dyn-save" data-key="prof_rel" data-attr="int"> Religion (Int)</span><input type="text" class="dyn-save dnd-skill" data-key="sk_rel" readonly></div>
+                        <div class="skill-item"><span><input type="checkbox" class="prof-toggle dyn-save" data-key="prof_slei" data-attr="dex"> Sleight of Hand (Dex)</span><input type="text" class="dyn-save dnd-skill" data-key="sk_slei" readonly></div>
+                        <div class="skill-item"><span><input type="checkbox" class="prof-toggle dyn-save" data-key="prof_ste" data-attr="dex"> Stealth (Dex)</span><input type="text" class="dyn-save dnd-skill" data-key="sk_ste" readonly></div>
+                        <div class="skill-item"><span><input type="checkbox" class="prof-toggle dyn-save" data-key="prof_surv" data-attr="wis"> Survival (Wis)</span><input type="text" class="dyn-save dnd-skill" data-key="sk_surv" readonly></div>
+                    </div>
+                </div>
+                <div class="sheet-box" style="margin-top: 15px;">
+                    <h4>Features, Traits & Proficiencies</h4>
+                    <textarea class="sheet-textarea dyn-save" data-key="features" style="min-height: 150px;"></textarea>
+                </div>
+            </div>
+        </div>
+    `,
+    daggerheart: `
+        <div class="sheet-row">
+            <input type="text" class="sheet-input dyn-save" data-key="name" placeholder="Character Name" style="font-size: 20px; font-weight: bold; flex: 2; color: var(--accent-main);">
+            <input type="text" class="sheet-input dyn-save" data-key="class" placeholder="Class & Subclass" style="flex: 2;">
+            <input type="text" class="sheet-input dyn-save" data-key="level" placeholder="Level" style="flex: 1;">
+        </div>
+        <div class="sheet-row" style="margin: 15px 0; gap: 10px;">
+            <div class="sheet-stat-box" style="flex: 1;"><label>HOPE</label><input type="text" class="dyn-save" data-key="hope"></div>
+            <div class="sheet-stat-box" style="flex: 1; border-color: #ef4444;"><label>FEAR</label><input type="text" class="dyn-save" data-key="fear" style="color: #ef4444;"></div>
+            <div class="sheet-stat-box" style="flex: 1;"><label>HP</label><input type="text" class="dyn-save" data-key="hp"></div>
+            <div class="sheet-stat-box" style="flex: 1;"><label>STRESS</label><input type="text" class="dyn-save" data-key="stress"></div>
+            <div class="sheet-stat-box" style="flex: 1.5;"><label>EVASION</label>
+                <div style="display:flex; gap:5px; align-items:center;">
+                    <input type="text" class="dyn-save dh-base-evasion" data-key="base_evasion" placeholder="Base" style="font-size: 12px; border-right: 1px solid var(--border-color); padding-right: 5px;" title="Base Class Evasion">
+                    <input type="text" class="dyn-save dh-evasion" data-key="evasion" title="Total Evasion">
+                </div>
+            </div>
+            <div class="sheet-stat-box" style="flex: 1;"><label>ARMOR</label><input type="text" class="dyn-save" data-key="armor"></div>
+        </div>
+        <div class="sheet-row">
+            <div class="sheet-col" style="flex: 1;">
+                <div class="sheet-box">
+                    <h4>Traits & Attributes</h4>
+                    <div class="skills-grid" style="grid-template-columns: 1fr;">
+                        <div class="skill-item"><span>Agility</span><input type="text" class="dyn-save dh-agi" data-key="agility"></div>
+                        <div class="skill-item"><span>Strength</span><input type="text" class="dyn-save" data-key="strength"></div>
+                        <div class="skill-item"><span>Finesse</span><input type="text" class="dyn-save" data-key="finesse"></div>
+                        <div class="skill-item"><span>Instinct</span><input type="text" class="dyn-save" data-key="instinct"></div>
+                        <div class="skill-item"><span>Presence</span><input type="text" class="dyn-save" data-key="presence"></div>
+                        <div class="skill-item"><span>Knowledge</span><input type="text" class="dyn-save" data-key="knowledge"></div>
+                    </div>
+                </div>
+                <div class="sheet-box" style="margin-top: 15px;">
+                    <h4>Experiences</h4>
+                    <textarea class="sheet-textarea dyn-save" data-key="experiences" style="min-height: 100px;"></textarea>
+                </div>
+            </div>
+            <div class="sheet-col" style="flex: 2;">
+                <div class="sheet-box" style="margin-bottom: 15px;">
+                    <h4>Damage Thresholds</h4>
+                    <div style="display: flex; gap: 10px;">
+                        <input type="text" class="sheet-input dyn-save" data-key="minor" placeholder="Minor">
+                        <input type="text" class="sheet-input dyn-save" data-key="major" placeholder="Major">
+                        <input type="text" class="sheet-input dyn-save" data-key="severe" placeholder="Severe">
+                    </div>
+                </div>
+                <div class="sheet-box" style="margin-bottom: 15px;">
+                    <h4>Active Weapons</h4>
+                    <textarea class="sheet-textarea dyn-save" data-key="weapons" style="min-height: 100px;"></textarea>
+                </div>
+                <div class="sheet-box">
+                    <h4>Domain Cards & Abilities</h4>
+                    <textarea class="sheet-textarea dyn-save" data-key="abilities" style="min-height: 150px;"></textarea>
+                </div>
+            </div>
+        </div>
+    `,
+    aquelarre: `
+        <div class="sheet-row">
+            <input type="text" class="sheet-input dyn-save" data-key="name" placeholder="Name" style="font-size: 20px; font-weight: bold; flex: 2; color: var(--accent-main);">
+            <input type="text" class="sheet-input dyn-save" data-key="profession" placeholder="Social Status / Profession" style="flex: 2;">
+        </div>
+        <div class="sheet-row" style="margin: 15px 0; gap: 10px;">
+            <div class="sheet-stat-box" style="flex: 1;"><label>Rationality</label><input type="text" class="dyn-save aquelarre-rr" data-key="rr"></div>
+            <div class="sheet-stat-box" style="flex: 1; border-color: #ef4444;"><label>Irrationality</label><input type="text" class="dyn-save aquelarre-irr" data-key="irr" style="color: #ef4444;"></div>
+            <div class="sheet-stat-box" style="flex: 1;"><label>Health (HP)</label><input type="text" class="dyn-save aquelarre-hp" data-key="hp"></div>
+            <div class="sheet-stat-box" style="flex: 1;"><label>Faith Points</label><input type="text" class="dyn-save" data-key="faith"></div>
+            <div class="sheet-stat-box" style="flex: 1;"><label>Luck</label><input type="text" class="dyn-save" data-key="luck"></div>
+        </div>
+        <div class="sheet-row">
+            <div class="sheet-col" style="flex: 1;">
+                <div class="sheet-box">
+                    <h4>Primary Characteristics</h4>
+                    <div class="skills-grid" style="grid-template-columns: 1fr;">
+                        <div class="skill-item"><span>Strength (STR)</span><input type="text" class="dyn-save aquelarre-str" data-key="str"></div>
+                        <div class="skill-item"><span>Agility (AGI)</span><input type="text" class="dyn-save" data-key="agi"></div>
+                        <div class="skill-item"><span>Dexterity (DEX)</span><input type="text" class="dyn-save" data-key="dex"></div>
+                        <div class="skill-item"><span>Stamina (STA)</span><input type="text" class="dyn-save aquelarre-sta" data-key="sta"></div>
+                        <div class="skill-item"><span>Perception (PER)</span><input type="text" class="dyn-save" data-key="per"></div>
+                        <div class="skill-item"><span>Communication (COM)</span><input type="text" class="dyn-save" data-key="com"></div>
+                        <div class="skill-item"><span>Culture (CUL)</span><input type="text" class="dyn-save" data-key="cul"></div>
+                    </div>
+                </div>
+            </div>
+            <div class="sheet-col" style="flex: 2;">
+                <div class="sheet-box" style="margin-bottom: 15px;">
+                    <h4>Core Competences</h4>
+                    <div class="skills-grid">
+                        <div class="skill-item"><span>Alertness</span><input type="text" class="dyn-save" data-key="sk_alert"></div>
+                        <div class="skill-item"><span>Brawl</span><input type="text" class="dyn-save" data-key="sk_brawl"></div>
+                        <div class="skill-item"><span>Dodge</span><input type="text" class="dyn-save" data-key="sk_dodge"></div>
+                        <div class="skill-item"><span>Empathy</span><input type="text" class="dyn-save" data-key="sk_emp"></div>
+                        <div class="skill-item"><span>Eloquence</span><input type="text" class="dyn-save" data-key="sk_elo"></div>
+                        <div class="skill-item"><span>Listen</span><input type="text" class="dyn-save" data-key="sk_list"></div>
+                        <div class="skill-item"><span>Melee Weapons</span><input type="text" class="dyn-save" data-key="sk_melee"></div>
+                        <div class="skill-item"><span>Memory</span><input type="text" class="dyn-save" data-key="sk_mem"></div>
+                        <div class="skill-item"><span>Missile Weapons</span><input type="text" class="dyn-save" data-key="sk_miss"></div>
+                        <div class="skill-item"><span>Ride</span><input type="text" class="dyn-save" data-key="sk_ride"></div>
+                        <div class="skill-item"><span>Stealth</span><input type="text" class="dyn-save" data-key="sk_stealth"></div>
+                        <div class="skill-item"><span>Theology</span><input type="text" class="dyn-save" data-key="sk_theo"></div>
+                    </div>
+                </div>
+                <div class="sheet-box">
+                    <h4>Spells, Rituals & Inventory</h4>
+                    <textarea class="sheet-textarea dyn-save" data-key="magic" style="min-height: 150px;"></textarea>
+                </div>
+            </div>
+        </div>
+    `,
+    vampire: `
+        <div class="sheet-row">
+            <input type="text" class="sheet-input dyn-save" data-key="name" placeholder="Name" style="font-size: 20px; font-weight: bold; flex: 2; color: #ef4444;">
+            <input type="text" class="sheet-input dyn-save" data-key="clan" placeholder="Clan & Generation" style="flex: 1;">
+            <input type="text" class="sheet-input dyn-save" data-key="concept" placeholder="Concept" style="flex: 1;">
+        </div>
+        <div class="sheet-row" style="margin: 15px 0; gap: 10px;">
+            <div class="sheet-stat-box" style="flex: 1;"><label>Health (HP)</label><input type="text" class="dyn-save vamp-hp" data-key="hp"></div>
+            <div class="sheet-stat-box" style="flex: 1;"><label>Willpower</label><input type="text" class="dyn-save vamp-will" data-key="will"></div>
+            <div class="sheet-stat-box" style="flex: 1; border-color: #ef4444;"><label>Hunger</label><input type="text" class="dyn-save" data-key="hunger" style="color: #ef4444;"></div>
+            <div class="sheet-stat-box" style="flex: 1;"><label>Humanity</label><input type="text" class="dyn-save" data-key="humanity"></div>
+            <div class="sheet-stat-box" style="flex: 1; border-color: #fbbf24;"><label>Blood Potency</label><input type="text" class="dyn-save" data-key="potency" style="color: #fbbf24;"></div>
+        </div>
+        <div class="sheet-row">
+            <div class="sheet-col" style="flex: 1;">
+                <div class="sheet-box">
+                    <h4>Attributes</h4>
+                    <label style="font-size:10px; color:var(--text-muted);">Physical</label>
+                    <div class="skills-grid" style="grid-template-columns: 1fr; margin-bottom: 10px;">
+                        <div class="skill-item"><span>Strength</span><input type="text" class="dyn-save" data-key="str"></div>
+                        <div class="skill-item"><span>Dexterity</span><input type="text" class="dyn-save" data-key="dex"></div>
+                        <div class="skill-item"><span>Stamina</span><input type="text" class="dyn-save vamp-sta" data-key="sta"></div>
+                    </div>
+                    <label style="font-size:10px; color:var(--text-muted);">Social</label>
+                    <div class="skills-grid" style="grid-template-columns: 1fr; margin-bottom: 10px;">
+                        <div class="skill-item"><span>Charisma</span><input type="text" class="dyn-save" data-key="cha"></div>
+                        <div class="skill-item"><span>Manipulation</span><input type="text" class="dyn-save" data-key="man"></div>
+                        <div class="skill-item"><span>Composure</span><input type="text" class="dyn-save vamp-com" data-key="com"></div>
+                    </div>
+                    <label style="font-size:10px; color:var(--text-muted);">Mental</label>
+                    <div class="skills-grid" style="grid-template-columns: 1fr;">
+                        <div class="skill-item"><span>Intelligence</span><input type="text" class="dyn-save" data-key="int"></div>
+                        <div class="skill-item"><span>Wits</span><input type="text" class="dyn-save" data-key="wit"></div>
+                        <div class="skill-item"><span>Resolve</span><input type="text" class="dyn-save vamp-res" data-key="res"></div>
+                    </div>
+                </div>
+            </div>
+            <div class="sheet-col" style="flex: 2;">
+                <div class="sheet-box" style="margin-bottom: 15px;">
+                    <h4>Skills</h4>
+                    <textarea class="sheet-textarea dyn-save" data-key="skills" style="min-height: 100px;" placeholder="Athletics, Brawl, Firearms, Persuasion, Occult..."></textarea>
+                </div>
+                <div class="sheet-box">
+                    <h4>Disciplines & Advantages</h4>
+                    <textarea class="sheet-textarea dyn-save" data-key="disciplines" style="min-height: 150px;"></textarea>
+                </div>
+            </div>
+        </div>
+    `,
+    assimilacao: `
+        <div class="sheet-row">
+            <input type="text" class="sheet-input dyn-save" data-key="name" placeholder="Nome do Personagem" style="font-size: 20px; font-weight: bold; flex: 2; color: var(--accent-main);">
+            <input type="text" class="sheet-input dyn-save" data-key="player" placeholder="Origem / Jogador" style="flex: 1;">
+        </div>
+        <div class="sheet-row" style="margin: 15px 0; gap: 10px;">
+            <div class="sheet-stat-box" style="flex: 1;"><label>Vitalidade</label><input type="text" class="dyn-save ass-hp" data-key="vitality"></div>
+            <div class="sheet-stat-box" style="flex: 1;"><label>Saúde Mental</label><input type="text" class="dyn-save ass-mental" data-key="mental_hp"></div>
+            <div class="sheet-stat-box" style="flex: 1;"><label>Defesa</label><input type="text" class="dyn-save" data-key="defesa"></div>
+            <div class="sheet-stat-box" style="flex: 1;"><label>Esquiva</label><input type="text" class="dyn-save ass-esq" data-key="esquiva"></div>
+            <div class="sheet-stat-box" style="flex: 1;"><label>Velocidade</label><input type="text" class="dyn-save" data-key="velocidade"></div>
+            <div class="sheet-stat-box" style="flex: 1;"><label>Carga</label><input type="text" class="dyn-save ass-carga" data-key="carga"></div>
+        </div>
+        <div class="sheet-row">
+            <div class="sheet-col" style="flex: 1;">
+                <div class="sheet-box">
+                    <h4>Atributos Principais</h4>
+                    <label style="font-size:10px; color:var(--text-muted);">Corpo</label>
+                    <div class="skills-grid" style="grid-template-columns: 1fr; margin-bottom: 10px;">
+                        <div class="skill-item"><span>Força</span><input type="text" class="dyn-save ass-forca" data-key="forca"></div>
+                        <div class="skill-item"><span>Agilidade</span><input type="text" class="dyn-save ass-agi" data-key="agilidade"></div>
+                        <div class="skill-item"><span>Metabolismo</span><input type="text" class="dyn-save ass-met" data-key="metabolismo"></div>
+                    </div>
+                    <label style="font-size:10px; color:var(--text-muted);">Mente</label>
+                    <div class="skills-grid" style="grid-template-columns: 1fr; margin-bottom: 10px;">
+                        <div class="skill-item"><span>Intelecto</span><input type="text" class="dyn-save ass-int" data-key="intelecto"></div>
+                        <div class="skill-item"><span>Raciocínio</span><input type="text" class="dyn-save" data-key="raciocinio"></div>
+                        <div class="skill-item"><span>Percepção</span><input type="text" class="dyn-save ass-perc" data-key="percepcao"></div>
+                    </div>
+                    <label style="font-size:10px; color:var(--text-muted);">Essência</label>
+                    <div class="skills-grid" style="grid-template-columns: 1fr;">
+                        <div class="skill-item"><span>Carisma</span><input type="text" class="dyn-save" data-key="carisma"></div>
+                        <div class="skill-item"><span>Manipulação</span><input type="text" class="dyn-save" data-key="manipulacao"></div>
+                        <div class="skill-item"><span>Propósito</span><input type="text" class="dyn-save ass-prop" data-key="proposito"></div>
+                    </div>
+                </div>
+            </div>
+            <div class="sheet-col" style="flex: 2;">
+                <div class="sheet-box" style="margin-bottom: 15px;">
+                    <h4>Aptidões & Perícias</h4>
+                    <div class="skills-grid">
+                        <div class="skill-item"><span>Atletismo</span><input type="text" class="dyn-save" data-key="sk_atl"></div>
+                        <div class="skill-item"><span>Furtividade</span><input type="text" class="dyn-save" data-key="sk_fur"></div>
+                        <div class="skill-item"><span>Investigação</span><input type="text" class="dyn-save" data-key="sk_inv"></div>
+                        <div class="skill-item"><span>Luta</span><input type="text" class="dyn-save" data-key="sk_lut"></div>
+                        <div class="skill-item"><span>Medicina</span><input type="text" class="dyn-save" data-key="sk_med"></div>
+                        <div class="skill-item"><span>Mira</span><input type="text" class="dyn-save" data-key="sk_mir"></div>
+                        <div class="skill-item"><span>Sobrevivência</span><input type="text" class="dyn-save" data-key="sk_sob"></div>
+                        <div class="skill-item"><span>Tecnologia</span><input type="text" class="dyn-save" data-key="sk_tec"></div>
+                    </div>
+                </div>
+                <div class="sheet-box">
+                    <h4>Mutação, Anomalia & Inventário</h4>
+                    <textarea class="sheet-textarea dyn-save" data-key="skills" style="min-height: 150px;"></textarea>
+                </div>
+            </div>
+        </div>
+    `
+};
+
+// --- MATH CALCULATORS ---
+function calculateDnDSkills() {
+    const profBonus = parseInt(document.getElementById('dnd-prof')?.value) || 0;
+    
+    document.querySelectorAll('.prof-toggle').forEach(checkbox => {
+        const attrKey = checkbox.getAttribute('data-attr'); 
+        const skillInput = checkbox.closest('.skill-item').querySelector('.dnd-skill');
+        const attrScore = parseInt(document.getElementById(`dnd-${attrKey}`)?.value) || 10;
+        const attrMod = Math.floor((attrScore - 10) / 2);
+        
+        let finalMod = attrMod;
+        if (checkbox.checked) finalMod += profBonus;
+        skillInput.value = (finalMod >= 0 ? '+' : '') + finalMod;
+    });
+}
+
+function calculateDaggerheart() {
+    const agi = parseInt(document.querySelector('.dh-agi')?.value) || 0;
+    const baseEva = parseInt(document.querySelector('.dh-base-evasion')?.value) || 0;
+    const evaField = document.querySelector('.dh-evasion');
+    if (evaField) evaField.value = baseEva + agi;
+}
+
+function calculateAquelarre(changedKey) {
+    const str = parseInt(document.querySelector('.aquelarre-str')?.value) || 0;
+    const sta = parseInt(document.querySelector('.aquelarre-sta')?.value) || 0;
+    const hpField = document.querySelector('.aquelarre-hp');
+    if (hpField && (str > 0 || sta > 0)) hpField.value = Math.ceil((str + sta) / 2);
+
+    // Rationality/Irrationality balance equation (RR + IRR = 100)
+    if (changedKey === 'rr') {
+        const rr = parseInt(document.querySelector('.aquelarre-rr')?.value) || 0;
+        const irrField = document.querySelector('.aquelarre-irr');
+        if (irrField) irrField.value = 100 - rr;
+    } else if (changedKey === 'irr') {
+        const irr = parseInt(document.querySelector('.aquelarre-irr')?.value) || 0;
+        const rrField = document.querySelector('.aquelarre-rr');
+        if (rrField) rrField.value = 100 - irr;
+    }
+}
+
+function calculateVampire() {
+    const sta = parseInt(document.querySelector('.vamp-sta')?.value) || 0;
+    const hpField = document.querySelector('.vamp-hp');
+    if (hpField && sta > 0) hpField.value = sta + 3;
+
+    const com = parseInt(document.querySelector('.vamp-com')?.value) || 0;
+    const res = parseInt(document.querySelector('.vamp-res')?.value) || 0;
+    const willField = document.querySelector('.vamp-will');
+    if (willField && (com > 0 || res > 0)) willField.value = com + res;
+}
+
+function calculateAssimilacao() {
+    const forca = parseInt(document.querySelector('.ass-forca')?.value) || 0;
+    const met = parseInt(document.querySelector('.ass-met')?.value) || 0;
+    const hpField = document.querySelector('.ass-hp');
+    if (hpField && (forca > 0 || met > 0)) hpField.value = forca + met + 10;
+
+    const int = parseInt(document.querySelector('.ass-int')?.value) || 0;
+    const prop = parseInt(document.querySelector('.ass-prop')?.value) || 0;
+    const mentalField = document.querySelector('.ass-mental');
+    if (mentalField && (int > 0 || prop > 0)) mentalField.value = int + prop + 10;
+
+    const agi = parseInt(document.querySelector('.ass-agi')?.value) || 0;
+    const perc = parseInt(document.querySelector('.ass-perc')?.value) || 0;
+    const esqField = document.querySelector('.ass-esq');
+    if (esqField && (agi > 0 || perc > 0)) esqField.value = agi + perc;
+
+    const cargaField = document.querySelector('.ass-carga');
+    if (cargaField && forca > 0) cargaField.value = forca * 5;
+}
+
+// --- SHEET RENDERER ---
+function renderCharacterSheet() {
+    const system = document.getElementById('rpg-system-select').value;
+    const container = document.getElementById('dynamic-sheet-container');
+    
+    container.innerHTML = sheetBlueprints[system] || `<p>System not found.</p>`;
+    
+    const saved = localStorage.getItem(`conflict_sheet_${system}`);
+    let parsedData = {};
+    if (saved) {
+        try { parsedData = JSON.parse(saved); } catch (e) {}
+    }
+    
+    container.querySelectorAll('.dyn-save').forEach(input => {
+        const key = input.getAttribute('data-key');
+        
+        if (input.type === 'checkbox') {
+            input.checked = parsedData[key] === true;
+        } else if (parsedData[key]) {
+            input.value = parsedData[key];
+        }
+        
+        input.addEventListener('input', (e) => {
+            const changedKey = e.target.getAttribute('data-key');
+            if (system === 'dnd') calculateDnDSkills();
+            if (system === 'daggerheart') calculateDaggerheart();
+            if (system === 'aquelarre') calculateAquelarre(changedKey);
+            if (system === 'vampire') calculateVampire();
+            if (system === 'assimilacao') calculateAssimilacao();
+            saveCharacterSheet(system);
+        });
+    });
+
+    // Run initial calculations on load
+    if (system === 'dnd') calculateDnDSkills();
+    if (system === 'daggerheart') calculateDaggerheart();
+    if (system === 'aquelarre') calculateAquelarre(null);
+    if (system === 'vampire') calculateVampire();
+    if (system === 'assimilacao') calculateAssimilacao();
+}
+
+function saveCharacterSheet(system) {
+    const container = document.getElementById('dynamic-sheet-container');
+    const data = {};
+    
+    container.querySelectorAll('.dyn-save').forEach(input => {
+        const key = input.getAttribute('data-key');
+        data[key] = input.type === 'checkbox' ? input.checked : input.value;
+    });
+    
+    localStorage.setItem(`conflict_sheet_${system}`, JSON.stringify(data));
+    
+    const statusText = document.getElementById('sheet-save-status');
+    statusText.style.opacity = 1;
+    clearTimeout(saveTimeout);
+    saveTimeout = setTimeout(() => { statusText.style.opacity = 0; }, 2000);
+}
+
+document.getElementById('rpg-system-select').addEventListener('change', renderCharacterSheet);
+window.addEventListener('DOMContentLoaded', renderCharacterSheet);

@@ -47,6 +47,7 @@
             <div class="tab-container">
                 <button class="tab-btn active" data-tab="main">Main</button>
                 <button class="tab-btn" data-tab="rpg">RPG Tabletop</button>
+                <button class="tab-btn" data-tab="sheets">Character Sheets</button>
             </div>
 
             <!-- TAB 1: MAIN VIEW -->
@@ -118,15 +119,17 @@
             </div>
 
             <!-- TAB 2: RPG TABLETOP VIEW -->
-          <!-- TAB 2: RPG TABLETOP VIEW -->
             <div id="rpg-view" class="content-wrapper" style="display: none; position: relative;">
                 
-                <!-- Compact Top Toolbar -->
-                <div class="panel glass-panel" style="display: flex; justify-content: space-between; align-items: center; padding: 10px 20px;">
-                    <div class="dice-controls" style="margin: 0; align-items: center;">
-                        <span style="font-weight: bold; font-size: 14px; margin-right: 10px;">🎲 Roll:</span>
-                        <input type="number" id="dice-count" value="1" min="1" max="10" style="width: 50px; padding: 8px; text-align: center; border-radius: 6px; border: 1px solid var(--border-color); background: rgba(0,0,0,0.3); color: var(--text-main);">
-                        <select id="dice-type" class="config-select" style="width: 80px; margin: 0; padding: 8px; border-radius: 6px;">
+                <!-- VTT Master Toolbar -->
+                <div class="panel glass-panel" style="display: flex; justify-content: space-between; align-items: center; padding: 10px 20px; flex-wrap: wrap; gap: 10px;">
+                    
+                    <!-- Player Tools -->
+                    <div class="dice-controls" style="margin: 0; align-items: center; display: flex; gap: 8px;">
+                        <button id="toggle-tokens-btn" class="secondary-btn">🎒 Tokens & Stamps</button>
+                        <span style="font-weight: bold; font-size: 14px; margin-left: 10px;">🎲 Roll:</span>
+                        <input type="number" id="dice-count" value="1" min="1" max="10" style="width: 50px; padding: 6px; text-align: center; border-radius: 6px; border: 1px solid var(--border-color); background: rgba(0,0,0,0.3); color: var(--text-main);">
+                        <select id="dice-type" class="config-select" style="width: 70px; margin: 0; padding: 6px; border-radius: 6px;">
                             <option value="d4">d4</option>
                             <option value="d6">d6</option>
                             <option value="d8">d8</option>
@@ -135,37 +138,89 @@
                             <option value="d20" selected>d20</option>
                             <option value="d100">d100</option>
                         </select>
-                        <button id="roll-dice-btn" class="primary-btn" style="padding: 8px 16px;">Toss</button>
+                        <button id="roll-dice-btn" class="primary-btn" style="padding: 6px 12px;">Toss</button>
                     </div>
-                    <button id="toggle-tokens-btn" class="secondary-btn">🎒 Token Library</button>
+
+                    <!-- DM Tools -->
+                    <div style="display: flex; gap: 8px; align-items: center; border-left: 1px solid var(--border-color); padding-left: 15px;">
+                        <button id="claim-dm-btn" class="outline-btn" style="border-color: #fbbf24; color: #fbbf24;">👑 Claim DM</button>
+                        <div id="dm-controls" style="display: none; gap: 8px;">
+                            <button id="toggle-fog-btn" class="secondary-btn">🌫️ Enable Fog</button>
+                            <button id="restore-map-btn" class="outline-btn" style="display: none;">↺ Last Map</button>
+                            <button id="map-upload-btn" class="secondary-btn">🗺️ Set Map</button>
+                            <input type="file" id="map-file-input" accept="image/*" style="display: none;">
+                        </div>
+                    </div>
                 </div>
 
-                <!-- Floating Token Panel -->
-                <div id="floating-token-panel" class="panel glass-panel" style="display: none; position: absolute; right: 0; top: 70px; z-index: 100; width: 280px; box-shadow: -5px 10px 30px rgba(0,0,0,0.6);">
+                <!-- Floating Asset Panel -->
+                <div id="floating-token-panel" class="panel glass-panel" style="display: none; position: absolute; left: 20px; top: 70px; z-index: 100; width: 300px; box-shadow: 5px 10px 30px rgba(0,0,0,0.6);">
                     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
-                        <h3 style="margin: 0; font-size: 15px;">Tokens</h3>
+                        <h3 style="margin: 0; font-size: 15px;">Token Library</h3>
                         <input type="file" id="token-upload" accept="image/*" style="display: none;">
                         <button id="add-token-btn" class="outline-btn" style="padding: 4px 8px; font-size: 11px;">+ Upload</button>
                     </div>
                     <div id="token-library" class="button-grid" style="max-height: 300px; overflow-y: auto;"></div>
                 </div>
 
-                <!-- Shared Layered Tabletop -->
-                <div class="canvas-container" id="tabletop-container" style="min-height: 60vh;">
-                    <div class="css-grid-bg"></div>
-                    <canvas id="shared-canvas"></canvas>
-                    <div id="token-layer"></div>
-                    <div id="dice-layer" style="position: absolute; top: 0; left: 0; right: 0; bottom: 0; pointer-events: none; z-index: 20;"></div>
-                    <div class="canvas-tools">
+       <!-- Advanced Layered Tabletop (SCROLLABLE) -->
+                <div class="canvas-container" id="tabletop-container" style="height: 60vh; position: relative; overflow: hidden;">
+                    
+                    <!-- THE SCROLLABLE AREA -->
+                    <div id="vtt-scroll-area" style="width: 100%; height: 100%; overflow: auto; cursor: grab; position: relative;">
+                        
+                        <!-- THE GIANT MAP LAYER (3000x3000) -->
+                        <div id="vtt-map-layer" style="width: 3000px; height: 3000px; position: relative; background-size: contain; background-position: center; background-repeat: no-repeat;">
+                                                       
+                            <!-- Layer 2: The Grid -->
+                            <div class="css-grid-bg" style="width: 100%; height: 100%; z-index: 2;"></div>
+                            
+                            <!-- Layer 3: Ink Canvas -->
+                            <canvas id="shared-canvas" style="position: absolute; top: 0; left: 0; z-index: 3;"></canvas>
+                            
+                            <!-- Layer 4: Character Tokens -->
+                            <div id="token-layer" style="position: absolute; top: 0; left: 0; right: 0; bottom: 0; pointer-events: none; z-index: 4;"></div>
+                            
+                            <!-- Layer 5: Fog of War -->
+                            <canvas id="fog-canvas" style="position: absolute; top: 0; left: 0; z-index: 5; pointer-events: none; opacity: 1.0;"></canvas>
+                            
+                            <!-- Layer 6: 2D Dice -->
+                            <div id="dice-layer" style="position: absolute; top: 0; left: 0; right: 0; bottom: 0; pointer-events: none; z-index: 20;"></div>
+                        </div>
+                    </div>
+                    
+                    <!-- Drawing Tools (Fixed at bottom) -->
+                    <div class="canvas-tools" style="z-index: 25; position: absolute; bottom: 15px; left: 50%; transform: translateX(-50%);">
                         <button id="pen-tool" class="tool-btn active">🖊️ Pen</button>
+                        <button id="fog-brush-tool" class="tool-btn" style="display: none;">🔦 Reveal Fog</button>
                         <button id="eraser-tool" class="tool-btn">🧽 Eraser</button>
                         <button id="clear-canvas-btn" class="tool-btn">🗑️ Clear Ink</button>
                         <input type="color" id="stroke-color" value="#10b981">
-                        <input type="range" id="stroke-width" min="1" max="10" value="2">
+                        <input type="range" id="stroke-width" min="1" max="50" value="2">
                     </div>
                 </div>
-            </div>
+            </div> <!-- THIS CLOSING DIV WAS MISSING: It closes the rpg-view tab -->
 
+            <!-- TAB 3: CHARACTER SHEETS VIEW -->
+            <div id="sheets-view" class="content-wrapper" style="display: none; height: 100%; flex-direction: column; overflow: hidden;">
+                <div class="panel glass-panel" style="display: flex; justify-content: space-between; align-items: center; padding: 15px 20px; flex-shrink: 0;">
+                    <h3>Character Vault</h3>
+                    <div style="display: flex; align-items: center; gap: 15px;">
+                        <span id="sheet-save-status" style="color: var(--accent-main); font-size: 11px; font-weight: bold; opacity: 0; transition: opacity 0.3s;">✓ Auto-Saved</span>
+                        <select id="rpg-system-select" class="config-select" style="width: 200px;">
+                            <option value="dnd">D&D 5e</option>
+                            <option value="daggerheart">Daggerheart</option>
+                            <option value="aquelarre">Aquelarre</option>
+                            <option value="assimilacao">Assimilação RPG</option>
+                            <option value="vampire">Vampire: The Masquerade</option>
+                        </select>
+                    </div>
+                </div>
+                
+                <!-- JS NATIVE BLUEPRINTS INJECT HERE -->
+                <div id="dynamic-sheet-container" class="panel glass-panel" style="flex-grow: 1; display: flex; flex-direction: column; overflow-y: auto; padding: 20px;">
+                </div>
+            </div>
             <!-- SETTINGS MODAL VIEW -->
             <div id="config-view" class="panel glass-panel" style="display: none; max-width: 600px; margin: 20px auto; width: 100%;">
                 <h2 style="margin-top: 0; display: flex; align-items: center; gap: 10px; color: var(--text-main);">
