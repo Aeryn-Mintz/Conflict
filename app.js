@@ -139,6 +139,14 @@ socket.onmessage = async (event) => {
                 avatar: localStorage.getItem('appAvatar') || null, offer: offer 
             }));
         }
+        else if (data.action === 'remove_video') {
+            // Explicitly destroy the frozen video container on the remote peer's screen
+            const vid1 = document.getElementById(`video-container-${data.streamId}`);
+            if (vid1) vid1.remove();
+            
+            const vid2 = document.getElementById(`video-container-${data.trackId}`);
+            if (vid2) vid2.remove();
+        }
         else if (data.action === 'offer' && data.targetId === myId) {
             peerNames[data.userId] = data.username || "Guest";
             peerAvatars[data.userId] = data.avatar || null;
@@ -514,7 +522,14 @@ document.getElementById('toggle-cam-btn').addEventListener('click', async (e) =>
     const btn = e.target;
     const localCam = document.getElementById('local-cam-video');
 
-    if (localCamStream) {
+   if (localCamStream) {
+        // NEW: Tell the room to destroy the frozen video container immediately
+        const streamId = localCamStream.id;
+        const trackId = localCamStream.getVideoTracks()[0]?.id;
+        if (socket.readyState === WebSocket.OPEN) {
+            socket.send(JSON.stringify({ action: 'remove_video', streamId, trackId }));
+        }
+
         localCamStream.getTracks().forEach(t => {
             t.stop();
             Object.values(peers).forEach(pc => {
@@ -573,6 +588,13 @@ const localVideo = document.getElementById('local-screen-video');
 
 shareScreenBtn.addEventListener('click', async () => {
     if (localScreenStream) {
+        // NEW: Tell the room to destroy the frozen screen share container immediately
+        const streamId = localScreenStream.id;
+        const trackId = localScreenStream.getVideoTracks()[0]?.id;
+        if (socket.readyState === WebSocket.OPEN) {
+            socket.send(JSON.stringify({ action: 'remove_video', streamId, trackId }));
+        }
+
         localScreenStream.getTracks().forEach(t => t.stop());
         if (localScreenStream.getVideoTracks().length > 0) {
             localScreenStream.getVideoTracks()[0].dispatchEvent(new Event('ended'));
@@ -1121,17 +1143,35 @@ let canvas = null, ctx = null, fogCanvas = null, fogCtx = null;
 let isDrawing = false, lastX = 0, lastY = 0, activeToken = null;
 let isDM = false;
 
-// Middle-Mouse Panning Variables
+// Middle-Mouse Panning & Zoom Variables
 let isPanning = false;
 let startPanX = 0, startPanY = 0, startScrollLeft = 0, startScrollTop = 0;
+let currentZoom = 1.0;
 
 // VTT Map & Scroll Containers
 const scrollArea = document.getElementById('vtt-scroll-area');
 const mapLayer = document.getElementById('vtt-map-layer');
 
-// Middle-Mouse Scroll Logic
+// --- ZOOM LOGIC (Mouse Wheel) ---
+scrollArea.addEventListener('wheel', (e) => {
+    e.preventDefault(); // Stop standard vertical page scrolling
+    
+    const zoomStep = 0.1;
+    // Scroll Up = Zoom In, Scroll Down = Zoom Out
+    if (e.deltaY < 0) {
+        currentZoom = Math.min(3.0, currentZoom + zoomStep);
+    } else {
+        currentZoom = Math.max(0.3, currentZoom - zoomStep);
+    }
+    
+    // Scale the map and set origin to top-left to keep layout math predictable
+    mapLayer.style.transform = `scale(${currentZoom})`;
+    mapLayer.style.transformOrigin = "0 0";
+}, { passive: false }); // Requires passive: false to allow preventDefault()
+
+// --- MIDDLE MOUSE PANNING LOGIC ---
 scrollArea.addEventListener('mousedown', (e) => {
-    if (e.button === 1) { // Middle Mouse Button
+    if (e.button === 1) { // Middle Mouse Button Only
         isPanning = true;
         startPanX = e.clientX;
         startPanY = e.clientY;
@@ -1152,9 +1192,10 @@ window.addEventListener('mouseup', (e) => {
         isPanning = false;
         scrollArea.style.cursor = 'grab';
     }
+    activeToken = null; // Drop token on mouseup globally
 });
 
-// DM Logic & Infinite Map Storage
+// --- DM LOGIC ---
 document.getElementById('claim-dm-btn').addEventListener('click', (e) => {
     isDM = !isDM;
     const btn = e.target;
@@ -1228,11 +1269,16 @@ document.getElementById('toggle-fog-btn').addEventListener('click', (e) => {
     }
 });
 
+// --- INTERACTIVE MAP LOGIC ---
 window.addEventListener('mousemove', (e) => {
-    if (!activeToken || !mapLayer || !canvas) return;
-    const rect = mapLayer.getBoundingClientRect(); // Map layer rect calculates scroll offset automatically!
-    let mouseX = e.clientX - rect.left;
-    let mouseY = e.clientY - rect.top;
+    // Don't drag token if we are panning the map
+    if (!activeToken || !mapLayer || !canvas || isPanning) return;
+    
+    const rect = mapLayer.getBoundingClientRect(); 
+    
+    // DIVIDE BY ZOOM: Calculates true position regardless of scale
+    let mouseX = (e.clientX - rect.left) / currentZoom;
+    let mouseY = (e.clientY - rect.top) / currentZoom;
 
     let snapX = Math.floor(mouseX / 50) * 50 + 25;
     let snapY = Math.floor(mouseY / 50) * 50 + 25;
@@ -1245,8 +1291,6 @@ window.addEventListener('mousemove', (e) => {
     }
 });
 
-window.addEventListener('mouseup', () => { activeToken = null; });
-
 function initCanvas() {
     canvas = document.getElementById('shared-canvas');
     fogCanvas = document.getElementById('fog-canvas');
@@ -1254,17 +1298,12 @@ function initCanvas() {
     ctx = canvas.getContext('2d');
     fogCtx = fogCanvas.getContext('2d');
     
-    // Set map to massive 3000x3000 size
-    canvas.width = 3000; canvas.height = 3000;
-    fogCanvas.width = 3000; fogCanvas.height = 3000;
-    
-    // Center the viewport on initialization
-    setTimeout(() => {
-        scrollArea.scrollLeft = 1500 - (scrollArea.clientWidth / 2);
-        scrollArea.scrollTop = 1500 - (scrollArea.clientHeight / 2);
-    }, 100);
-    
+    // Check if it's already initialized BEFORE setting width/height to prevent ink wiping
     if (!canvas.dataset.initialized) {
+        // Set map to massive 3000x3000 size ONLY ONCE
+        canvas.width = 3000; canvas.height = 3000;
+        fogCanvas.width = 3000; fogCanvas.height = 3000;
+        
         mapLayer.addEventListener('mousedown', startDrawing);
         mapLayer.addEventListener('mousemove', draw);
         mapLayer.addEventListener('mouseup', stopDrawing);
@@ -1283,8 +1322,13 @@ function initCanvas() {
         document.getElementById('stroke-width').addEventListener('input', updateStrokeWidth);
         canvas.dataset.initialized = "true";
     }
-}
 
+    // Always recenter the camera when opening the tab, but don't delete the ink
+    setTimeout(() => {
+        scrollArea.scrollLeft = 1500 - (scrollArea.clientWidth / 2);
+        scrollArea.scrollTop = 1500 - (scrollArea.clientHeight / 2);
+    }, 50);
+}
 let currentTool = 'pen';
 let strokeColor = '#10b981';
 let strokeWidth = 2;
@@ -1304,27 +1348,19 @@ function updateStrokeWidth(e) {
 
 function getMousePosition(e) {
     const rect = canvas.getBoundingClientRect();
-    return [e.clientX - rect.left, e.clientY - rect.top];
-}
-
-function getMousePosition(e) {
-    const rect = canvas.getBoundingClientRect();
-    return [e.clientX - rect.left, e.clientY - rect.top];
+    // DIVIDE BY ZOOM: Keeps ink perfectly under your mouse pointer!
+    return [(e.clientX - rect.left) / currentZoom, (e.clientY - rect.top) / currentZoom];
 }
 
 function startDrawing(e) {
-    // FIX: Only allow drawing if it is a Left-Click! (Middle click is 1, Right click is 2)
+    // Only allow drawing if it is a Left-Click! (Middle click is 1, Right click is 2)
     if (e.button !== 0) return; 
 
-    // Don't draw if clicking on a UI element
     if (e.target.tagName === 'BUTTON' || e.target.tagName === 'INPUT' || activeToken) return;
     isDrawing = true;
     [lastX, lastY] = getMousePosition(e);
     
-    // Single click fog reveal
-    if (currentTool === 'fog-brush' && isDM && fogCtx) {
-        revealFog(lastX, lastY);
-    }
+    if (currentTool === 'fog-brush' && isDM && fogCtx) revealFog(lastX, lastY);
 }
 
 function revealFog(x, y) {
@@ -1382,9 +1418,15 @@ function placeTokenOnMap(asset, broadcast = true) {
     t.id = 'map-token-' + asset.id;
     t.className = 'map-token';
     
-    const scrollArea = document.getElementById('vtt-scroll-area');
-    let startX = Math.floor((scrollArea.scrollLeft + scrollArea.clientWidth / 2) / 50) * 50 + 25;
-    let startY = Math.floor((scrollArea.scrollTop + scrollArea.clientHeight / 2) / 50) * 50 + 25;
+    const mapRect = mapLayer.getBoundingClientRect();
+    const scrollRect = scrollArea.getBoundingClientRect();
+    
+    // Find exact center of screen, adjusted perfectly for zoom
+    let centerX = (scrollRect.left + scrollRect.width / 2 - mapRect.left) / currentZoom;
+    let centerY = (scrollRect.top + scrollRect.height / 2 - mapRect.top) / currentZoom;
+    
+    let startX = Math.floor(centerX / 50) * 50 + 25;
+    let startY = Math.floor(centerY / 50) * 50 + 25;
     
     t.style.left = (asset.x || startX) + 'px';
     t.style.top = (asset.y || startY) + 'px';
@@ -1406,7 +1448,6 @@ function placeTokenOnMap(asset, broadcast = true) {
         activeToken = t; 
     });
 
-    // Always append to the token layer
     document.getElementById('token-layer').appendChild(t);
 
     if (broadcast && socket.readyState === WebSocket.OPEN) {
@@ -1428,7 +1469,7 @@ document.getElementById('token-upload').addEventListener('change', (event) => {
             id: Math.random().toString(36).substring(2, 9),
             name: file.name.split('.')[0],
             src: e.target.result,
-            type: 'token' // Forced token type
+            type: 'token' 
         };
         addTokenToLibrary(asset);
     };

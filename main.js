@@ -132,15 +132,15 @@ function createWindow() {
             callback(null);
         });
     });
+    session.defaultSession.webRequest.onBeforeSendHeaders((details, callback) => {
+        details.requestHeaders['Bypass-Tunnel-Reminder'] = 'true';
+        details.requestHeaders['User-Agent'] = 'conflict-desktop-client';
+        callback({ requestHeaders: details.requestHeaders });
+    });
 }
 
 app.whenReady().then(createWindow);
 
-app.on('window-all-closed', () => {
-    if (tunnelProcess) tunnelProcess.close(); // Close localtunnel properly
-    if (server) server.close();
-    if (process.platform !== 'darwin') app.quit();
-});
 ipcMain.on('start-host', async (event) => {
     let tunnel = null;
     let shareCode = null;
