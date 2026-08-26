@@ -1,0 +1,237 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Conflict Launcher</title>
+    <link rel="stylesheet" href="style.css">
+    <style>
+        /* Specific styles just for the centered Launch Screen */
+        body {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background-image: radial-gradient(circle at 50% 50%, rgba(16, 185, 129, 0.1), transparent 70%);
+        }
+        .launcher-box {
+            width: 100%;
+            max-width: 450px;
+            text-align: center;
+            padding: 40px;
+        }
+        .brand-huge {
+            font-size: 36px;
+            font-weight: 900;
+            margin-bottom: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 15px;
+            text-transform: uppercase;
+        }
+        .brand-icon-img {
+            width: 45px;
+            height: 45px;
+            filter: drop-shadow(0 0 15px rgba(16, 185, 129, 0.8));
+        }
+        .subtitle {
+            color: var(--text-muted);
+            margin-bottom: 40px;
+            font-size: 14px;
+        }
+        .choice-btn {
+            width: 100%;
+            padding: 15px;
+            font-size: 16px;
+            margin-bottom: 15px;
+            border-radius: 12px;
+        }
+        .hidden-panel {
+            display: none;
+            margin-top: 25px;
+            padding-top: 25px;
+            border-top: 1px solid var(--border-color);
+            animation: fadeIn 0.3s ease;
+        }
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(-10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        .invite-box {
+            background: rgba(0,0,0,0.4);
+            padding: 12px;
+            border-radius: 8px;
+            font-family: monospace;
+            color: var(--accent-main);
+            margin-bottom: 15px;
+            border: 1px dashed var(--border-color);
+            word-break: break-all;
+            user-select: text; /* Allow copying */
+        }
+    </style>
+</head>
+<body>
+
+    <div class="launcher-box glass-panel">
+        <div class="brand-huge">
+            <img src="./conflict-logo.png" alt="Logo" class="brand-icon-img"> 
+            Conflict
+        </div>
+        <div class="subtitle">Secure P2P Comms & Media</div>
+
+        <!-- MAIN CHOICES -->
+        <div id="main-choices">
+            <button id="btn-show-host" class="primary-btn choice-btn">Host a Room</button>
+            <button id="btn-show-join" class="secondary-btn choice-btn">Join a Room</button>
+        </div>
+
+        <!-- HOSTING PANEL -->
+        <div id="host-panel" class="hidden-panel">
+            <h3 style="margin-bottom: 10px;">Starting Secure Server...</h3>
+            <p id="host-status" style="color: var(--text-muted); font-size: 13px;">Spinning up local tunnel, please wait...</p>
+            
+            <div id="invite-section" style="display: none;">
+                <p style="font-size: 13px; margin-bottom: 5px;">Share this Invite Link with friends:</p>
+                <div class="invite-box" id="invite-link-display">Loading...</div>
+                <button id="btn-enter-hosted" class="primary-btn choice-btn" style="margin-top: 10px;">Enter Room</button>
+            </div>
+        </div>
+
+        <!-- JOINING PANEL -->
+        <div id="join-panel" class="hidden-panel">
+            <h3 style="margin-bottom: 10px;">Join an Existing Room</h3>
+            <p style="color: var(--text-muted); font-size: 13px; margin-bottom: 15px;">Paste the Invite Link from your host below.</p>
+            <input type="url" id="invite-input" placeholder="https://..." style="width: 100%; box-sizing: border-box; margin-bottom: 15px; text-align: center;">
+            <button id="btn-connect-join" class="primary-btn choice-btn">Connect</button>
+            <button id="btn-back-join" class="outline-btn" style="width: 100%;">Back</button>
+        </div>
+    </div>
+
+    <!-- Electron Logic -->
+    <script>
+        // Because nodeIntegration is true, we can use Electron's IPC in the frontend!
+        const { ipcRenderer } = require('electron');
+
+        const mainChoices = document.getElementById('main-choices');
+        const hostPanel = document.getElementById('host-panel');
+        const joinPanel = document.getElementById('join-panel');
+
+        // --- HOST LOGIC ---
+        document.getElementById('btn-show-host').addEventListener('click', () => {
+            mainChoices.style.display = 'none';
+            hostPanel.style.display = 'block';
+            
+            // Tell main.js to start the invisible Node.js server and open the tunnel
+            ipcRenderer.send('start-host');
+        });
+
+// Replace the host-started event handler (around lines 128-134) with:
+ipcRenderer.on('host-started', (event, data) => {
+    // Handle both old string format and new object format for backward compatibility
+    const tunnelUrl = typeof data === 'string' ? data : data.fullUrl;
+    const shareCode = typeof data === 'object' && data.shareCode ? data.shareCode : null;
+    
+    document.getElementById('host-status').style.display = 'none';
+    document.getElementById('invite-section').style.display = 'block';
+    document.getElementById('invite-link-display').innerText = tunnelUrl;
+    
+    // Store and display the share code
+    if (shareCode) {
+        localStorage.setItem('conflictShareCode', shareCode);
+        
+        // Create share code display element
+        const shareCodeDisplay = document.createElement('div');
+        shareCodeDisplay.style.marginTop = '10px';
+        shareCodeDisplay.style.padding = '8px';
+        shareCodeDisplay.style.background = 'rgba(0,0,0,0.2)';
+        shareCodeDisplay.style.borderRadius = '6px';
+        shareCodeDisplay.style.fontSize = '20px';
+        shareCodeDisplay.style.fontWeight = 'bold';
+        shareCodeDisplay.style.textAlign = 'center';
+        shareCodeDisplay.style.letterSpacing = '2px';
+        shareCodeDisplay.style.color = 'var(--accent-main)';
+        shareCodeDisplay.style.fontFamily = 'monospace';
+        shareCodeDisplay.innerHTML = `Share this code: <span id="share-code-value">${shareCode}</span>`;
+        
+        // Add copy button
+        const copyBtn = document.createElement('button');
+        copyBtn.textContent = 'Copy Code';
+        copyBtn.style.marginLeft = '10px';
+        copyBtn.style.padding = '4px 8px';
+        copyBtn.style.fontSize = '12px';
+        copyBtn.style.borderRadius = '4px';
+        copyBtn.style.border = 'none';
+        copyBtn.style.background = 'var(--accent-main)';
+        copyBtn.style.color = 'white';
+        copyBtn.style.cursor = 'pointer';
+        copyBtn.onclick = () => {
+            navigator.clipboard.writeText(shareCode).then(() => {
+                copyBtn.textContent = 'Copied!';
+                setTimeout(() => copyBtn.textContent = 'Copy Code', 1500);
+            });
+        };
+        shareCodeDisplay.appendChild(copyBtn);
+        
+        document.getElementById('invite-section').appendChild(shareCodeDisplay);
+    }
+    
+    // FIX: The host connects locally for zero ping. The tunnel is only for friends!
+    localStorage.setItem('conflictServerUrl', 'ws://localhost:8080');
+});
+
+// Replace the join logic (around lines 158-172) with:
+        ipcRenderer.on('host-failed', (event, errorMsg) => {
+            document.getElementById('host-status').innerText = `Error: ${errorMsg}\nTry restarting the app.`;
+            document.getElementById('host-status').style.color = "var(--accent-alert)";
+        });
+
+        document.getElementById('btn-enter-hosted').addEventListener('click', () => {
+            // Load the actual voice chat UI
+            window.location.href = 'app.html';
+        });
+
+        // --- JOIN LOGIC ---
+        document.getElementById('btn-show-join').addEventListener('click', () => {
+            mainChoices.style.display = 'none';
+            joinPanel.style.display = 'block';
+        });
+
+        document.getElementById('btn-back-join').addEventListener('click', () => {
+            joinPanel.style.display = 'none';
+            mainChoices.style.display = 'block';
+        });
+
+document.getElementById('btn-connect-join').addEventListener('click', () => {
+    const input = document.getElementById('invite-input').value.trim();
+    if (input) {
+        let wsUrl;
+        
+        // Clean and validate input
+        const cleaned = input.toLowerCase().replace(/[^a-z0-9]/g, '');
+        
+        // Check if input looks like our 6-char share code
+        if (/^[a-z0-9]{6}$/.test(cleaned)) {
+            // It's our share code - construct the expected URL
+            // Try our preferred format first
+            wsUrl = `https://conflict-${cleaned}.loca.lt`.replace('http', 'ws');
+        } else if (input.includes('.')) {
+            // Looks like a URL or subdomain.domain format
+            try {
+                const url = new URL(input.startsWith('http') ? input : `https://${input}`);
+                wsUrl = url.toString().replace('http', 'ws');
+            } catch (e) {
+                alert("Invalid Invite Link!");
+                return;
+            }
+        } else {
+            // Assume it's just the subdomain part (no dots)
+            wsUrl = `https://${input}.loca.lt`.replace('http', 'ws');
+        }
+        
+        localStorage.setItem('conflictServerUrl', wsUrl);
+        window.location.href = 'app.html';
+    }
+});
+    </script>
+</body>
+</html>

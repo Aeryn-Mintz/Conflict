@@ -1,0 +1,231 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Conflict</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="conflict-app">
+        
+        <!-- SIDEBAR -->
+        <aside class="sidebar">
+            <div class="brand">
+                <img src="./conflict-logo.png" alt="Logo" class="brand-icon-img"> 
+                Conflict
+            </div>
+
+            <div class="sidebar-section">
+                <h4>My Profile</h4>
+                <div class="user-card" id="user-1" style="background: transparent; padding: 0;">
+                    <div class="avatar-wrapper">
+                        <img src="https://via.placeholder.com/50" id="user-avatar" class="avatar" alt="Avatar">
+                    </div>
+                    <div class="user-info">
+                        <span class="username" id="display-username">You</span>
+                    </div>
+                </div>
+                <button id="settings-btn" class="outline-btn" style="margin-top: 10px; width: 100%;">⚙️ User Settings</button>
+                <button id="leave-room-btn" class="outline-btn" style="margin-top: 8px; width: 100%; color: var(--accent-alert); border-color: var(--accent-alert);">🚪 Leave Room</button>   
+            </div>
+
+            <div class="sidebar-section">
+                <div class="panel-header-row" style="display: flex; justify-content: space-between; align-items: center;">
+                    <h4>Soundboard</h4>
+                </div>
+                <input type="range" id="effectsVolumeSlider" min="0" max="1" step="0.01" value="0.8" title="Effects Volume" style="width: 100%; margin-bottom: 10px;">
+                <input type="file" id="add-sound-upload" accept="audio/mp3, audio/wav, audio/ogg" style="display: none;">
+                <button id="add-sound-btn" class="secondary-btn" style="width: 100%; font-size: 12px;">+ Add Sound (Max 5s)</button>
+                <div id="soundboard-buttons" class="button-grid"></div>
+            </div>
+        </aside>
+
+        <!-- MAIN VIEW AREA -->
+        <main class="main-content">
+            <!-- Navigation Tabs -->
+            <div class="tab-container">
+                <button class="tab-btn active" data-tab="main">Main</button>
+                <button class="tab-btn" data-tab="rpg">RPG Tabletop</button>
+            </div>
+
+            <!-- TAB 1: MAIN VIEW -->
+            <div id="main-view" class="content-wrapper">
+                <div class="top-row">
+                    <section class="panel glass-panel" id="video-grid" style="flex-grow: 1;">
+                        <div class="panel-header" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+                            <h3>Live Stage</h3>
+                            <div class="action-row" style="margin: 0; display: flex; gap: 8px;">
+                                <button id="join-voice-btn" class="primary-btn">🎙️ Join Call</button>
+                                <button id="mute-mic-btn" class="secondary-btn" disabled>🔇 Mute</button>
+                                <button id="toggle-cam-btn" class="secondary-btn">📷 Camera</button>
+                                <button id="share-screen-btn" class="secondary-btn">💻 Share Screen</button>
+                            </div>
+                        </div>
+                        <p id="voice-status" class="status-text" style="display: none;"></p>
+                        
+                        <!-- Local Videos -->
+                        <video id="local-cam-video" autoplay playsinline muted style="display: none; width: 100%; max-height: 400px; border-radius: 8px; margin-top: 15px; object-fit: contain; background: #000; transform: scaleX(-1);"></video>
+                        <video id="local-screen-video" autoplay playsinline muted style="display: none; width: 100%; border-radius: 8px; margin-top: 15px;"></video>
+                        <div id="remote-audio-container"></div>
+                    </section>
+                </div>
+
+                <div class="bottom-row">
+                    <section class="panel glass-panel bot-panel">
+                        <div class="panel-header-row" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+                            <h3>Media Player</h3>
+                            <div style="display: flex; gap: 8px;">
+                                <button id="yt-playpause-btn" class="icon-btn" title="Play/Pause for everyone">⏯️</button>
+                                <button id="yt-skip-btn" class="icon-btn" title="Skip to Next Video">⏭️</button>
+                                <button id="toggle-queue-btn" class="icon-btn" title="Toggle Queue Playlist">📜 Queue</button>
+                                <button id="toggle-yt-view" class="icon-btn" title="Minimize/Maximize Video">👁️</button>
+                            </div>
+                        </div>
+                        <div class="bot-search-row">
+                            <input type="text" id="yt-url-input" placeholder="Paste YouTube Link or Playlist...">
+                            <button id="yt-queue-add-btn" class="secondary-btn" title="Add to Queue">+ Queue</button>
+                            <button id="yt-play-btn" class="primary-btn">Play Now</button>
+                        </div>
+                        
+                        <!-- Playlist Queue Dropdown Drawer -->
+                        <div id="yt-queue-drawer" class="yt-queue-container">
+                            <div style="padding: 6px 12px; font-size: 11px; text-transform: uppercase; color: var(--text-muted); border-bottom: 1px solid var(--border-color); display: flex; justify-content: space-between;">
+                                <span>Up Next Queue</span>
+                                <span id="queue-count">0 items</span>
+                            </div>
+                            <div id="yt-queue-list"></div>
+                        </div>
+
+                        <div id="yt-wrapper" style="margin-top: 15px; border-radius: 8px; overflow: hidden; border: 1px solid var(--border-color); display: none; flex-grow: 1;">
+                            <div id="yt-iframe"></div>
+                        </div>
+                    </section>
+
+                    <section class="panel glass-panel chat-area">
+                        <h3>Room Chat</h3>
+                        <div id="chat-messages"></div>
+                        <div id="chat-input-row">
+                            <input type="text" id="chat-input" placeholder="Message the room...">
+                            <button id="chat-send-btn" class="primary-btn">Send</button>
+                        </div>
+                    </section>
+                </div>
+                
+                <section class="panel glass-panel call-area" style="margin-top: 20px;">
+                    <h3>Connected Users</h3>
+                </section>
+            </div>
+
+            <!-- TAB 2: RPG TABLETOP VIEW -->
+          <!-- TAB 2: RPG TABLETOP VIEW -->
+            <div id="rpg-view" class="content-wrapper" style="display: none; position: relative;">
+                
+                <!-- Compact Top Toolbar -->
+                <div class="panel glass-panel" style="display: flex; justify-content: space-between; align-items: center; padding: 10px 20px;">
+                    <div class="dice-controls" style="margin: 0; align-items: center;">
+                        <span style="font-weight: bold; font-size: 14px; margin-right: 10px;">🎲 Roll:</span>
+                        <input type="number" id="dice-count" value="1" min="1" max="10" style="width: 50px; padding: 8px; text-align: center; border-radius: 6px; border: 1px solid var(--border-color); background: rgba(0,0,0,0.3); color: var(--text-main);">
+                        <select id="dice-type" class="config-select" style="width: 80px; margin: 0; padding: 8px; border-radius: 6px;">
+                            <option value="d4">d4</option>
+                            <option value="d6">d6</option>
+                            <option value="d8">d8</option>
+                            <option value="d10">d10</option>
+                            <option value="d12">d12</option>
+                            <option value="d20" selected>d20</option>
+                            <option value="d100">d100</option>
+                        </select>
+                        <button id="roll-dice-btn" class="primary-btn" style="padding: 8px 16px;">Toss</button>
+                    </div>
+                    <button id="toggle-tokens-btn" class="secondary-btn">🎒 Token Library</button>
+                </div>
+
+                <!-- Floating Token Panel -->
+                <div id="floating-token-panel" class="panel glass-panel" style="display: none; position: absolute; right: 0; top: 70px; z-index: 100; width: 280px; box-shadow: -5px 10px 30px rgba(0,0,0,0.6);">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+                        <h3 style="margin: 0; font-size: 15px;">Tokens</h3>
+                        <input type="file" id="token-upload" accept="image/*" style="display: none;">
+                        <button id="add-token-btn" class="outline-btn" style="padding: 4px 8px; font-size: 11px;">+ Upload</button>
+                    </div>
+                    <div id="token-library" class="button-grid" style="max-height: 300px; overflow-y: auto;"></div>
+                </div>
+
+                <!-- Shared Layered Tabletop -->
+                <div class="canvas-container" id="tabletop-container" style="min-height: 60vh;">
+                    <div class="css-grid-bg"></div>
+                    <canvas id="shared-canvas"></canvas>
+                    <div id="token-layer"></div>
+                    <div id="dice-layer" style="position: absolute; top: 0; left: 0; right: 0; bottom: 0; pointer-events: none; z-index: 20;"></div>
+                    <div class="canvas-tools">
+                        <button id="pen-tool" class="tool-btn active">🖊️ Pen</button>
+                        <button id="eraser-tool" class="tool-btn">🧽 Eraser</button>
+                        <button id="clear-canvas-btn" class="tool-btn">🗑️ Clear Ink</button>
+                        <input type="color" id="stroke-color" value="#10b981">
+                        <input type="range" id="stroke-width" min="1" max="10" value="2">
+                    </div>
+                </div>
+            </div>
+
+            <!-- SETTINGS MODAL VIEW -->
+            <div id="config-view" class="panel glass-panel" style="display: none; max-width: 600px; margin: 20px auto; width: 100%;">
+                <h2 style="margin-top: 0; display: flex; align-items: center; gap: 10px; color: var(--text-main);">
+                    <img src="./conflict-logo.png" alt="Logo" class="brand-icon-img" style="width: 32px; height: 32px;"> 
+                    Conflict Settings
+                </h2>
+                
+                <div class="config-group">
+                    <label class="config-label">Display Name:</label>
+                    <input type="text" id="username-input" class="config-input" placeholder="Enter your name...">
+                    
+                    <label class="config-label" style="margin-top: 15px; display: block;">Profile Picture:</label>
+                    <div class="avatar-upload-row" style="display: flex; align-items: center; gap: 15px; margin-top: 10px;">
+                        <img src="https://via.placeholder.com/80" id="config-avatar-preview" class="avatar-large" alt="Preview">
+                        <input type="file" id="avatar-upload" accept="image/png, image/jpeg, image/gif" style="display: none;">
+                        <button id="change-avatar-btn" class="secondary-btn">Upload Image / GIF</button>
+                    </div>
+                </div>
+
+                <div class="config-group" style="margin-top: 25px; border-top: 1px solid var(--border-color); padding-top: 20px;">
+                    <h3>Hardware Settings</h3>
+                    <label class="config-label" style="font-size: 13px; color: var(--text-muted);">Microphone:</label>
+                    <select id="audio-in-select" class="config-select"></select>
+                    
+                    <label class="config-label" style="margin-top: 15px; display: block; font-size: 13px; color: var(--text-muted);">Speaker / Output Device:</label>
+                    <select id="audio-out-select" class="config-select"></select>
+
+                    <label class="config-label" style="margin-top: 15px; display: block; font-size: 13px; color: var(--text-muted);">Webcam / Capture Card:</label>
+                    <select id="video-in-select" class="config-select"></select>
+                    
+                    <button id="refresh-devices-btn" class="outline-btn" style="margin-top: 15px; width: 100%;">🔄 Refresh Devices</button>
+                </div>
+
+                <div class="config-group" style="margin-top: 25px; border-top: 1px solid var(--border-color); padding-top: 20px;">
+                    <h3>Theme Colors</h3>
+                    <div class="color-pickers" style="display: flex; gap: 15px; flex-wrap: wrap;">
+                        <label>Background <input type="color" id="color-bg"></label>
+                        <label>Panel <input type="color" id="color-panel"></label>
+                        <label>Text <input type="color" id="color-text"></label>
+                        <label>Accent <input type="color" id="color-accent"></label>
+                    </div>
+                    <button id="reset-theme-btn" class="outline-btn" style="margin-top: 15px;">Reset to Default Theme</button>
+                </div>
+
+                <div class="config-group" style="margin-top: 20px;">
+                    <button id="save-theme-btn" class="primary-btn" style="width: 100%; font-size: 16px; padding: 12px;">Save & Return</button>
+                </div>
+            </div>
+        </main>
+    </div>
+
+<!-- SCREEN SHARE PICKER MODAL -->
+    <div id="modal-overlay" style="display: none; position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(0,0,0,0.7); z-index: 99; backdrop-filter: blur(4px);"></div>
+    <div id="screen-picker-modal" class="panel glass-panel" style="display: none; position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); z-index: 100; max-width: 850px; width: 90%; max-height: 80vh; flex-direction: column;">
+        <h3 style="margin-top: 0; margin-bottom: 20px;">Select what to share</h3>
+        <div id="screen-picker-grid" style="display: flex; flex-wrap: wrap; gap: 15px; overflow-y: auto; max-height: 60vh; padding-right: 10px;"></div>
+        <button id="cancel-screen-picker" class="outline-btn" style="margin-top: 20px; width: 100%;">Cancel</button>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
+    <script src="app.js"></script>
+</body>
+</html>
