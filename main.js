@@ -73,6 +73,23 @@ function createWindow() {
                 }
             });
         });
+
+        // Without this, a socket hiccup on ANY one client (e.g. a flaky tunnel
+        // connection) throws an unhandled 'error' event, which crashes the whole
+        // Electron main process - kicking every connected client, not just the
+        // one with the bad connection.
+        ws.on('error', (err) => {
+            console.error('Client socket error:', err.message);
+        });
+
+        ws.on('close', () => {
+            console.log('Client disconnected from room');
+        });
+    });
+
+    // Same failure mode at the server level - guard it too.
+    wss.on('error', (err) => {
+        console.error('WebSocket server error:', err.message);
     });
 
   server.on('error', (e) => {
