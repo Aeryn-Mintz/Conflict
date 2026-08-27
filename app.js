@@ -10,7 +10,9 @@ const mapSavePath = path.join(os.homedir(), '.conflict_vtt_map.txt');
 // 1. WEBSOCKET & WEBRTC ENGINE
 // ==========================================
 const serverUrl = localStorage.getItem('conflictServerUrl') || 'ws://localhost:8080';
-const socket = new WebSocket(serverUrl);
+let socket;
+let reconnectAttempts = 0;
+let reconnectTimer = null;
 
 let audioCtx = null;
 let soundboardDest = null;
@@ -62,36 +64,6 @@ document.querySelectorAll('.tab-btn').forEach(btn => {
     });
 });
 
-socket.onopen = () => {
-    console.log("🟢 Connected to signaling server.");
-    const joinBtn = document.getElementById('join-voice-btn');
-    if (joinBtn && !localMicStream) {
-        joinBtn.disabled = false;
-        joinBtn.innerText = "🎙️ Join Call";
-    }
-
-    const chatInput = document.getElementById('chat-input');
-    const chatBtn = document.getElementById('chat-send-btn');
-    if (chatInput && chatBtn) {
-        chatInput.disabled = false;
-        chatBtn.disabled = false;
-        chatInput.placeholder = '🟢 Connected! Message the room...';
-    }
-
-    setInterval(() => {
-        if (socket.readyState === WebSocket.OPEN) socket.send(JSON.stringify({ action: 'keep_alive' }));
-    }, 15000); 
-};
-
-socket.onerror = (error) => {
-    console.error("WebSocket Error:", error);
-    const chatInput = document.getElementById('chat-input');
-    if (chatInput) {
-        chatInput.placeholder = '🔴 Disconnected from server.';
-        chatInput.disabled = true;
-    }
-};
-
 function addLocalTracksSafely(pc) {
     const senders = pc.getSenders();
     const sentTracks = senders.map(s => s.track).filter(Boolean);
@@ -119,7 +91,53 @@ async function handleRemoteDescription(pc, remoteUserId, desc) {
     }
 }
 
-socket.onmessage = async (event) => {
+function connectSocket() {
+    socket = new WebSocket(serverUrl);
+
+    socket.onopen = () => {
+        console.log("🟢 Connected to signaling server.");
+        reconnectAttempts = 0;
+        clearTimeout(reconnectTimer);
+
+        const joinBtn = document.getElementById('join-voice-btn');
+        if (joinBtn && !localMicStream) {
+            joinBtn.disabled = false;
+            joinBtn.innerText = "🎙️ Join Call";
+        }
+
+        const chatInput = document.getElementById('chat-input');
+        const chatBtn = document.getElementById('chat-send-btn');
+        if (chatInput && chatBtn) {
+            chatInput.disabled = false;
+            chatBtn.disabled = false;
+            chatInput.placeholder = '🟢 Connected! Message the room...';
+        }
+    };
+
+    socket.onerror = (error) => {
+        console.error("WebSocket Error:", error);
+    };
+
+    // This was the main gap: previously there was no onclose handler at all, so
+    // once a connection dropped for ANY reason (host hiccup, tunnel restart, wifi
+    // blip) the client just sat there dead with no way back in short of a full
+    // relaunch. Now it retries with backoff (2s, 4s, 8s... capped at 30s) until
+    // the room is reachable again.
+    socket.onclose = () => {
+        const chatInput = document.getElementById('chat-input');
+        const chatBtn = document.getElementById('chat-send-btn');
+        reconnectAttempts++;
+        const delaySec = Math.min(30, Math.pow(2, reconnectAttempts));
+        if (chatInput && chatBtn) {
+            chatInput.placeholder = `🟡 Disconnected — reconnecting in ${delaySec}s...`;
+            chatInput.disabled = true;
+            chatBtn.disabled = true;
+        }
+        clearTimeout(reconnectTimer);
+        reconnectTimer = setTimeout(connectSocket, delaySec * 1000);
+    };
+
+    socket.onmessage = async (event) => {
     try {
         const data = JSON.parse(event.data);
         
@@ -307,7 +325,18 @@ socket.onmessage = async (event) => {
     } catch (e) {
         console.error("Error parsing message:", e);
     }
-};
+    };
+}
+
+connectSocket();
+
+// Runs once for the app's lifetime (not per-connection), so reconnects don't
+// stack up duplicate intervals sending multiple keep_alive pings per tick.
+setInterval(() => {
+    if (socket && socket.readyState === WebSocket.OPEN) {
+        socket.send(JSON.stringify({ action: 'keep_alive' }));
+    }
+}, 15000);
 
 function createPeerConnection(remoteUserId) {
     const pc = new RTCPeerConnection(rtcConfig);
