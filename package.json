@@ -1,9 +1,9 @@
 {
   "name": "conflict",
-  "version": "1.5.9",
+  "version": "1.6.2",
   "description": "Secure P2P Comms & Media",
   "author": "YourName",
-  "main": "main.js",
+  "main": "js/main.js",
   "scripts": {
     "start": "electron .",
     "build": "electron-builder --win"
