@@ -1,9 +1,11 @@
 // ==========================================
 // CAMPAIGN SYSTEM & ROSTER ENGINE
 // ==========================================
-let saveTimeout;
+window.saveTimeout = null;
+window.npcRoster = JSON.parse(localStorage.getItem('conflict_npcs') || '[]');
 
-const sheetBlueprints = {
+
+window.sheetBlueprints = {
     dnd: `<div class="sheet-row"><input type="text" class="sheet-input dyn-save" data-key="name" placeholder="Character Name" style="font-size: 22px; font-weight: bold; flex: 2; color: var(--accent-main);"><input type="text" class="sheet-input dyn-save" data-key="class" placeholder="Class & Level" style="flex: 1;"><input type="text" class="sheet-input dyn-save" data-key="race" placeholder="Race & Background" style="flex: 1;"></div><div class="sheet-row" style="margin-top: 15px;"><div class="sheet-col" style="flex: 2;"><div class="sheet-row" style="gap: 10px; margin-bottom: 15px;"><div class="sheet-stat-box" style="flex: 1;"><label>Armor Class</label><input type="text" class="dyn-save" data-key="ac"></div><div class="sheet-stat-box" style="flex: 1;"><label class="rollable" data-dice="1d20" data-name="Initiative" data-mod-target="init">Initiative</label><input type="text" class="dyn-save" data-key="init"></div><div class="sheet-stat-box" style="flex: 1;"><label>Speed</label><input type="text" class="dyn-save" data-key="speed"></div><div class="sheet-stat-box" style="flex: 1;"><label>Prof Bonus</label><input type="text" class="dyn-save" data-key="prof" id="dnd-prof" value="2"></div></div><div class="sheet-row" style="gap: 10px; margin-bottom: 15px;"><div class="sheet-stat-box" style="flex: 2;"><label>Current Hit Points</label><input type="text" class="dyn-save" data-key="hp" placeholder="Max / Current" style="font-size: 22px;"></div><div class="sheet-stat-box" style="flex: 1;"><label>Temp HP</label><input type="text" class="dyn-save" data-key="temp_hp"></div><div class="sheet-stat-box" style="flex: 1;"><label>Hit Dice</label><input type="text" class="dyn-save" data-key="hit_dice"></div></div><div class="sheet-box"><h4>Attacks & Spellcasting</h4><textarea class="sheet-textarea dyn-save" data-key="attacks" style="min-height: 120px;" placeholder="Weapon | Atk Bonus | Damage/Type"></textarea></div><div class="sheet-box" style="margin-top: 15px;"><h4>Equipment & Gold</h4><textarea class="sheet-textarea dyn-save" data-key="inventory" style="min-height: 100px;"></textarea></div></div><div class="sheet-col" style="flex: 3;"><div class="sheet-box"><h4>Attributes & Saves</h4><div style="display: flex; gap: 10px; justify-content: space-between; margin-bottom: 15px;"><div class="attr-box"><label class="rollable" data-dice="1d20" data-name="STR Check" data-mod-target="str" data-is-attr="true">STR</label><input type="text" class="dyn-save dnd-attr" data-key="str" id="dnd-str" value="10"></div><div class="attr-box"><label class="rollable" data-dice="1d20" data-name="DEX Check" data-mod-target="dex" data-is-attr="true">DEX</label><input type="text" class="dyn-save dnd-attr" data-key="dex" id="dnd-dex" value="10"></div><div class="attr-box"><label class="rollable" data-dice="1d20" data-name="CON Check" data-mod-target="con" data-is-attr="true">CON</label><input type="text" class="dyn-save dnd-attr" data-key="con" id="dnd-con" value="10"></div><div class="attr-box"><label class="rollable" data-dice="1d20" data-name="INT Check" data-mod-target="int" data-is-attr="true">INT</label><input type="text" class="dyn-save dnd-attr" data-key="int" id="dnd-int" value="10"></div><div class="attr-box"><label class="rollable" data-dice="1d20" data-name="WIS Check" data-mod-target="wis" data-is-attr="true">WIS</label><input type="text" class="dyn-save dnd-attr" data-key="wis" id="dnd-wis" value="10"></div><div class="attr-box"><label class="rollable" data-dice="1d20" data-name="CHA Check" data-mod-target="cha" data-is-attr="true">CHA</label><input type="text" class="dyn-save dnd-attr" data-key="cha" id="dnd-cha" value="10"></div></div><h4>Skills</h4><div class="skills-grid"><div class="skill-item"><span><input type="checkbox" class="prof-toggle dyn-save" data-key="prof_acro" data-attr="dex"> <span class="rollable" data-dice="1d20" data-name="Acrobatics" data-mod-target="sk_acro">Acrobatics</span></span><input type="text" class="dyn-save dnd-skill" data-key="sk_acro" readonly></div><div class="skill-item"><span><input type="checkbox" class="prof-toggle dyn-save" data-key="prof_anim" data-attr="wis"> <span class="rollable" data-dice="1d20" data-name="Animal Handling" data-mod-target="sk_anim">Animal Hand</span></span><input type="text" class="dyn-save dnd-skill" data-key="sk_anim" readonly></div><div class="skill-item"><span><input type="checkbox" class="prof-toggle dyn-save" data-key="prof_arca" data-attr="int"> <span class="rollable" data-dice="1d20" data-name="Arcana" data-mod-target="sk_arca">Arcana</span></span><input type="text" class="dyn-save dnd-skill" data-key="sk_arca" readonly></div><div class="skill-item"><span><input type="checkbox" class="prof-toggle dyn-save" data-key="prof_athl" data-attr="str"> <span class="rollable" data-dice="1d20" data-name="Athletics" data-mod-target="sk_athl">Athletics</span></span><input type="text" class="dyn-save dnd-skill" data-key="sk_athl" readonly></div><div class="skill-item"><span><input type="checkbox" class="prof-toggle dyn-save" data-key="prof_dece" data-attr="cha"> <span class="rollable" data-dice="1d20" data-name="Deception" data-mod-target="sk_dece">Deception</span></span><input type="text" class="dyn-save dnd-skill" data-key="sk_dece" readonly></div><div class="skill-item"><span><input type="checkbox" class="prof-toggle dyn-save" data-key="prof_hist" data-attr="int"> <span class="rollable" data-dice="1d20" data-name="History" data-mod-target="sk_hist">History</span></span><input type="text" class="dyn-save dnd-skill" data-key="sk_hist" readonly></div><div class="skill-item"><span><input type="checkbox" class="prof-toggle dyn-save" data-key="prof_ins" data-attr="wis"> <span class="rollable" data-dice="1d20" data-name="Insight" data-mod-target="sk_ins">Insight</span></span><input type="text" class="dyn-save dnd-skill" data-key="sk_ins" readonly></div><div class="skill-item"><span><input type="checkbox" class="prof-toggle dyn-save" data-key="prof_inti" data-attr="cha"> <span class="rollable" data-dice="1d20" data-name="Intimidation" data-mod-target="sk_inti">Intimidation</span></span><input type="text" class="dyn-save dnd-skill" data-key="sk_inti" readonly></div><div class="skill-item"><span><input type="checkbox" class="prof-toggle dyn-save" data-key="prof_inv" data-attr="int"> <span class="rollable" data-dice="1d20" data-name="Investigation" data-mod-target="sk_inv">Investigation</span></span><input type="text" class="dyn-save dnd-skill" data-key="sk_inv" readonly></div><div class="skill-item"><span><input type="checkbox" class="prof-toggle dyn-save" data-key="prof_med" data-attr="wis"> <span class="rollable" data-dice="1d20" data-name="Medicine" data-mod-target="sk_med">Medicine</span></span><input type="text" class="dyn-save dnd-skill" data-key="sk_med" readonly></div><div class="skill-item"><span><input type="checkbox" class="prof-toggle dyn-save" data-key="prof_nat" data-attr="int"> <span class="rollable" data-dice="1d20" data-name="Nature" data-mod-target="sk_nat">Nature</span></span><input type="text" class="dyn-save dnd-skill" data-key="sk_nat" readonly></div><div class="skill-item"><span><input type="checkbox" class="prof-toggle dyn-save" data-key="prof_perc" data-attr="wis"> <span class="rollable" data-dice="1d20" data-name="Perception" data-mod-target="sk_perc">Perception</span></span><input type="text" class="dyn-save dnd-skill" data-key="sk_perc" readonly></div><div class="skill-item"><span><input type="checkbox" class="prof-toggle dyn-save" data-key="prof_perf" data-attr="cha"> <span class="rollable" data-dice="1d20" data-name="Performance" data-mod-target="sk_perf">Performance</span></span><input type="text" class="dyn-save dnd-skill" data-key="sk_perf" readonly></div><div class="skill-item"><span><input type="checkbox" class="prof-toggle dyn-save" data-key="prof_pers" data-attr="cha"> <span class="rollable" data-dice="1d20" data-name="Persuasion" data-mod-target="sk_pers">Persuasion</span></span><input type="text" class="dyn-save dnd-skill" data-key="sk_pers" readonly></div><div class="skill-item"><span><input type="checkbox" class="prof-toggle dyn-save" data-key="prof_rel" data-attr="int"> <span class="rollable" data-dice="1d20" data-name="Religion" data-mod-target="sk_rel">Religion</span></span><input type="text" class="dyn-save dnd-skill" data-key="sk_rel" readonly></div><div class="skill-item"><span><input type="checkbox" class="prof-toggle dyn-save" data-key="prof_slei" data-attr="dex"> <span class="rollable" data-dice="1d20" data-name="Sleight of Hand" data-mod-target="sk_slei">Sleight Hand</span></span><input type="text" class="dyn-save dnd-skill" data-key="sk_slei" readonly></div><div class="skill-item"><span><input type="checkbox" class="prof-toggle dyn-save" data-key="prof_ste" data-attr="dex"> <span class="rollable" data-dice="1d20" data-name="Stealth" data-mod-target="sk_ste">Stealth</span></span><input type="text" class="dyn-save dnd-skill" data-key="sk_ste" readonly></div><div class="skill-item"><span><input type="checkbox" class="prof-toggle dyn-save" data-key="prof_surv" data-attr="wis"> <span class="rollable" data-dice="1d20" data-name="Survival" data-mod-target="sk_surv">Survival</span></span><input type="text" class="dyn-save dnd-skill" data-key="sk_surv" readonly></div></div></div><div class="sheet-box" style="margin-top: 15px;"><h4>Features, Traits & Proficiencies</h4><textarea class="sheet-textarea dyn-save" data-key="features" style="min-height: 150px;"></textarea></div></div></div>`,
     daggerheart: `<div class="sheet-row"><input type="text" class="sheet-input dyn-save" data-key="name" placeholder="Character Name" style="font-size: 20px; font-weight: bold; flex: 2; color: var(--accent-main);"><input type="text" class="sheet-input dyn-save" data-key="class" placeholder="Class & Subclass" style="flex: 2;"><input type="text" class="sheet-input dyn-save" data-key="level" placeholder="Level" style="flex: 1;"></div><div class="sheet-row" style="margin: 15px 0; gap: 10px;"><div class="sheet-stat-box" style="flex: 1;"><label>HOPE</label><input type="text" class="dyn-save" data-key="hope"></div><div class="sheet-stat-box" style="flex: 1; border-color: #ef4444;"><label>FEAR</label><input type="text" class="dyn-save" data-key="fear" style="color: #ef4444;"></div><div class="sheet-stat-box" style="flex: 1;"><label>HP</label><input type="text" class="dyn-save" data-key="hp"></div><div class="sheet-stat-box" style="flex: 1;"><label>STRESS</label><input type="text" class="dyn-save" data-key="stress"></div><div class="sheet-stat-box" style="flex: 1.5;"><label class="rollable" data-dice="1d20" data-name="Evasion" data-mod-target="evasion">EVASION</label><div style="display:flex; gap:5px; align-items:center;"><input type="text" class="dyn-save dh-base-evasion" data-key="base_evasion" placeholder="Base" style="font-size: 12px; border-right: 1px solid var(--border-color); padding-right: 5px;" title="Base Class Evasion"><input type="text" class="dyn-save dh-evasion" data-key="evasion" title="Total Evasion"></div></div><div class="sheet-stat-box" style="flex: 1;"><label>ARMOR</label><input type="text" class="dyn-save" data-key="armor"></div></div><div class="sheet-row"><div class="sheet-col" style="flex: 1;"><div class="sheet-box"><h4>Traits & Attributes</h4><div class="skills-grid" style="grid-template-columns: 1fr;"><div class="skill-item"><span class="rollable" data-dice="2d12" data-name="Agility Roll" data-mod-target="agility">Agility</span><input type="text" class="dyn-save dh-agi" data-key="agility"></div><div class="skill-item"><span class="rollable" data-dice="2d12" data-name="Strength Roll" data-mod-target="strength">Strength</span><input type="text" class="dyn-save" data-key="strength"></div><div class="skill-item"><span class="rollable" data-dice="2d12" data-name="Finesse Roll" data-mod-target="finesse">Finesse</span><input type="text" class="dyn-save" data-key="finesse"></div><div class="skill-item"><span class="rollable" data-dice="2d12" data-name="Instinct Roll" data-mod-target="instinct">Instinct</span><input type="text" class="dyn-save" data-key="instinct"></div><div class="skill-item"><span class="rollable" data-dice="2d12" data-name="Presence Roll" data-mod-target="presence">Presence</span><input type="text" class="dyn-save" data-key="presence"></div><div class="skill-item"><span class="rollable" data-dice="2d12" data-name="Knowledge Roll" data-mod-target="knowledge">Knowledge</span><input type="text" class="dyn-save" data-key="knowledge"></div></div></div><div class="sheet-box" style="margin-top: 15px;"><h4>Experiences</h4><textarea class="sheet-textarea dyn-save" data-key="experiences" style="min-height: 100px;"></textarea></div></div><div class="sheet-col" style="flex: 2;"><div class="sheet-box" style="margin-bottom: 15px;"><h4>Damage Thresholds</h4><div style="display: flex; gap: 10px;"><input type="text" class="sheet-input dyn-save" data-key="minor" placeholder="Minor"><input type="text" class="sheet-input dyn-save" data-key="major" placeholder="Major"><input type="text" class="sheet-input dyn-save" data-key="severe" placeholder="Severe"></div></div><div class="sheet-box" style="margin-bottom: 15px;"><h4>Active Weapons</h4><textarea class="sheet-textarea dyn-save" data-key="weapons" style="min-height: 100px;"></textarea></div><div class="sheet-box"><h4>Domain Cards & Abilities</h4><textarea class="sheet-textarea dyn-save" data-key="abilities" style="min-height: 150px;"></textarea></div></div></div>`,
     aquelarre: `<div class="sheet-row"><input type="text" class="sheet-input dyn-save" data-key="name" placeholder="Name" style="font-size: 20px; font-weight: bold; flex: 2; color: var(--accent-main);"><input type="text" class="sheet-input dyn-save" data-key="profession" placeholder="Social Status / Profession" style="flex: 2;"></div><div class="sheet-row" style="margin: 15px 0; gap: 10px;"><div class="sheet-stat-box" style="flex: 1;"><label class="rollable" data-dice="1d100" data-name="Rationality Test" data-mod-target="rr">Rationality</label><input type="text" class="dyn-save aquelarre-rr" data-key="rr"></div><div class="sheet-stat-box" style="flex: 1; border-color: #ef4444;"><label class="rollable" data-dice="1d100" data-name="Irrationality Test" data-mod-target="irr">Irrationality</label><input type="text" class="dyn-save aquelarre-irr" data-key="irr" style="color: #ef4444;"></div><div class="sheet-stat-box" style="flex: 1;"><label>Health (HP)</label><input type="text" class="dyn-save aquelarre-hp" data-key="hp"></div><div class="sheet-stat-box" style="flex: 1;"><label>Faith Points</label><input type="text" class="dyn-save" data-key="faith"></div><div class="sheet-stat-box" style="flex: 1;"><label class="rollable" data-dice="1d100" data-name="Luck Roll" data-mod-target="luck">Luck</label><input type="text" class="dyn-save" data-key="luck"></div></div><div class="sheet-row"><div class="sheet-col" style="flex: 1;"><div class="sheet-box"><h4>Primary Characteristics</h4><div class="skills-grid" style="grid-template-columns: 1fr;"><div class="skill-item"><span class="rollable" data-dice="1d100" data-name="Strength Check" data-mod-target="str">Strength (STR)</span><input type="text" class="dyn-save aquelarre-str" data-key="str"></div><div class="skill-item"><span class="rollable" data-dice="1d100" data-name="Agility Check" data-mod-target="agi">Agility (AGI)</span><input type="text" class="dyn-save" data-key="agi"></div><div class="skill-item"><span class="rollable" data-dice="1d100" data-name="Dexterity Check" data-mod-target="dex">Dexterity (DEX)</span><input type="text" class="dyn-save" data-key="dex"></div><div class="skill-item"><span class="rollable" data-dice="1d100" data-name="Stamina Check" data-mod-target="sta">Stamina (STA)</span><input type="text" class="dyn-save aquelarre-sta" data-key="sta"></div><div class="skill-item"><span class="rollable" data-dice="1d100" data-name="Perception Check" data-mod-target="per">Perception (PER)</span><input type="text" class="dyn-save" data-key="per"></div><div class="skill-item"><span class="rollable" data-dice="1d100" data-name="Communication Check" data-mod-target="com">Communication (COM)</span><input type="text" class="dyn-save" data-key="com"></div><div class="skill-item"><span class="rollable" data-dice="1d100" data-name="Culture Check" data-mod-target="cul">Culture (CUL)</span><input type="text" class="dyn-save" data-key="cul"></div></div></div></div><div class="sheet-col" style="flex: 2;"><div class="sheet-box" style="margin-bottom: 15px;"><h4>Core Competences</h4><div class="skills-grid"><div class="skill-item"><span class="rollable" data-dice="1d100" data-name="Alertness" data-mod-target="sk_alert">Alertness</span><input type="text" class="dyn-save" data-key="sk_alert"></div><div class="skill-item"><span class="rollable" data-dice="1d100" data-name="Brawl" data-mod-target="sk_brawl">Brawl</span><input type="text" class="dyn-save" data-key="sk_brawl"></div><div class="skill-item"><span class="rollable" data-dice="1d100" data-name="Dodge" data-mod-target="sk_dodge">Dodge</span><input type="text" class="dyn-save" data-key="sk_dodge"></div><div class="skill-item"><span class="rollable" data-dice="1d100" data-name="Empathy" data-mod-target="sk_emp">Empathy</span><input type="text" class="dyn-save" data-key="sk_emp"></div><div class="skill-item"><span class="rollable" data-dice="1d100" data-name="Eloquence" data-mod-target="sk_elo">Eloquence</span><input type="text" class="dyn-save" data-key="sk_elo"></div><div class="skill-item"><span class="rollable" data-dice="1d100" data-name="Listen" data-mod-target="sk_list">Listen</span><input type="text" class="dyn-save" data-key="sk_list"></div><div class="skill-item"><span class="rollable" data-dice="1d100" data-name="Melee Weapons" data-mod-target="sk_melee">Melee Weapons</span><input type="text" class="dyn-save" data-key="sk_melee"></div><div class="skill-item"><span class="rollable" data-dice="1d100" data-name="Memory" data-mod-target="sk_mem">Memory</span><input type="text" class="dyn-save" data-key="sk_mem"></div><div class="skill-item"><span class="rollable" data-dice="1d100" data-name="Missile Weapons" data-mod-target="sk_miss">Missile Weapons</span><input type="text" class="dyn-save" data-key="sk_miss"></div><div class="skill-item"><span class="rollable" data-dice="1d100" data-name="Ride" data-mod-target="sk_ride">Ride</span><input type="text" class="dyn-save" data-key="sk_ride"></div><div class="skill-item"><span class="rollable" data-dice="1d100" data-name="Stealth" data-mod-target="sk_stealth">Stealth</span><input type="text" class="dyn-save" data-key="sk_stealth"></div><div class="skill-item"><span class="rollable" data-dice="1d100" data-name="Theology" data-mod-target="sk_theo">Theology</span><input type="text" class="dyn-save" data-key="sk_theo"></div></div></div><div class="sheet-box"><h4>Spells, Rituals & Inventory</h4><textarea class="sheet-textarea dyn-save" data-key="magic" style="min-height: 150px;"></textarea></div></div></div>`,
@@ -116,54 +118,70 @@ function updateRosterDropdown(system) {
     const activeChar = roster.find(c => c.id === window.activeCharId);
     const imgEl = document.getElementById('char-portrait-img');
     if (imgEl && activeChar) {
-        imgEl.src = activeChar.portrait || 'https://via.placeholder.com/120';
+        imgEl.src = activeChar.portrait || window.defaultAvatar;
     }
 }
 
-document.getElementById('rpg-system-select')?.addEventListener('change', (e) => { 
-    if (window.isDM) window.applyCampaignSystem(e.target.value, true); 
-});
-
-document.getElementById('new-char-btn')?.addEventListener('click', () => {
-    const system = document.getElementById('rpg-system-select').value;
-    const roster = getRoster(system);
-    window.activeCharId = Math.random().toString(36).substr(2, 9);
-    roster.push({ id: window.activeCharId, name: 'New Character', data: {}, portrait: null });
-    saveRoster(system, roster); 
-    updateRosterDropdown(system); 
-    renderCharacterSheet();
-});
-
-document.getElementById('character-roster')?.addEventListener('change', (e) => { 
-    window.activeCharId = e.target.value; 
-    const system = document.getElementById('rpg-system-select').value;
-    updateRosterDropdown(system); 
-    renderCharacterSheet(); 
-});
-
-document.getElementById('view-party-btn')?.addEventListener('click', () => {
-    window.viewingParty = !window.viewingParty;
-    const btn = document.getElementById('view-party-btn');
-    const controls = [document.getElementById('rpg-system-select'), document.getElementById('character-roster'), document.getElementById('new-char-btn'), document.querySelector('.sheet-divider')];
-    
-    if (window.viewingParty) {
-        btn.innerText = "👤 My Character"; 
-        controls.forEach(el => { if (el) el.style.display = 'none'; }); 
-        const portrait = document.getElementById('char-portrait-img'); if(portrait) portrait.style.display = 'none';
-        const spawnBtn = document.getElementById('spawn-char-token-btn'); if(spawnBtn) spawnBtn.style.display = 'none';
-        window.renderPartyList();
-    } else {
-        btn.innerText = "👁️ Party Sheets"; 
-        controls.forEach(el => { if (el) el.style.display = 'block'; }); 
-        const portrait = document.getElementById('char-portrait-img'); if(portrait) portrait.style.display = 'block';
-        const spawnBtn = document.getElementById('spawn-char-token-btn'); if(spawnBtn) spawnBtn.style.display = 'block';
-        renderCharacterSheet(); 
+document.addEventListener('change', (e) => { 
+    if (e.target.id === 'rpg-system-select') {
+        window.applyCampaignSystem(e.target.value, window.isDM);
+    }
+    if (e.target.id === 'character-roster') {
+        window.activeCharId = e.target.value; 
+        updateRosterDropdown(document.getElementById('rpg-system-select').value); 
+        renderCharacterSheet();
     }
 });
 
-document.getElementById('tab-dm-btn')?.addEventListener('click', () => {
-    if (window.renderPartyList) window.renderPartyList();
-    renderNpcs();
+document.addEventListener('click', (e) => {
+    if (e.target.closest('#new-char-btn')) {
+        const system = document.getElementById('rpg-system-select').value;
+        const roster = getRoster(system);
+        window.activeCharId = Math.random().toString(36).substr(2, 9);
+        roster.push({ id: window.activeCharId, name: 'New Character', data: {}, portrait: null });
+        saveRoster(system, roster); 
+        updateRosterDropdown(system); 
+        renderCharacterSheet();
+    }
+    if (e.target.closest('#view-party-btn')) {
+        window.viewingParty = !window.viewingParty;
+        const btn = document.getElementById('view-party-btn');
+        const controls = [document.getElementById('rpg-system-select'), document.getElementById('character-roster'), document.getElementById('new-char-btn'), document.querySelector('.sheet-divider')];
+        
+        if (window.viewingParty) {
+            if(btn) btn.innerText = "👤 My Character"; 
+            controls.forEach(el => { if (el) el.style.display = 'none'; }); 
+            const portrait = document.getElementById('char-portrait-img'); if(portrait) portrait.style.display = 'none';
+            const spawnBtn = document.getElementById('spawn-char-token-btn'); if(spawnBtn) spawnBtn.style.display = 'none';
+            window.renderPartyList();
+        } else {
+            if(btn) btn.innerText = "👁️ Party Sheets"; 
+            controls.forEach(el => { if (el) el.style.display = 'block'; }); 
+            const portrait = document.getElementById('char-portrait-img'); if(portrait) portrait.style.display = 'block';
+            const spawnBtn = document.getElementById('spawn-char-token-btn'); if(spawnBtn) spawnBtn.style.display = 'block';
+            renderCharacterSheet(); 
+        }
+    }
+    if (e.target.closest('#tab-dm-btn')) {
+        if (window.renderPartyList) window.renderPartyList();
+        renderNpcs();
+    }
+    if (e.target.closest('#add-npc-btn')) {
+        window.npcRoster.push({ id: Math.random().toString(36).substr(2,9), name: 'New Goblin', hp: 7, ac: 15, portrait: null });
+        saveNpcs(); renderNpcs();
+    }
+    if (e.target.closest('#spawn-char-token-btn')) {
+        const sys = document.getElementById('rpg-system-select').value;
+        const roster = getRoster(sys);
+        const activeChar = roster.find(c => c.id === window.activeCharId);
+        
+        if (!activeChar || !activeChar.portrait) return alert("Please click your portrait above and upload an image first!");
+        
+        const asset = { id: window.myId + '-' + window.activeCharId, name: activeChar.name, src: activeChar.portrait, type: 'token', ownerId: window.myId };
+        if (window.placeTokenOnMap) window.placeTokenOnMap(asset, true);
+        
+        document.querySelector('[data-tab="rpg"]')?.click();
+    }
 });
 
 window.renderPartyList = function() {
@@ -190,7 +208,7 @@ window.renderPartyList = function() {
     for (const [uid, sheetInfo] of Object.entries(window.partySheets)) {
         const btnHtml = `
             <div style="display:flex; align-items:center; gap:10px;">
-                <img src="${sheetInfo.portrait || 'https://via.placeholder.com/50'}" style="width:40px; height:40px; border-radius:50%; object-fit:cover;">
+                <img src="${sheetInfo.portrait || window.defaultAvatar}" style="width:40px; height:40px; border-radius:50%; object-fit:cover;">
                 <div>
                     <strong style="font-size:15px; color:var(--accent-main);">${sheetInfo.charName}</strong><br>
                     <span style="font-size:11px; color:var(--text-muted);">${sheetInfo.username} — ${window.formatSystemName(sheetInfo.system)}</span>
@@ -208,7 +226,7 @@ window.renderPartyList = function() {
             const btn2 = document.createElement('div');
             btn2.className = 'panel'; btn2.style.background = 'rgba(0,0,0,0.4)'; btn2.style.padding = '10px'; btn2.style.cursor = 'pointer';
             btn2.innerHTML = btnHtml;
-            btn2.onclick = () => { document.querySelector('[data-tab="sheets"]').click(); window.viewingParty = false; document.getElementById('view-party-btn').click(); renderRemoteSheet(uid); };
+            btn2.onclick = () => { document.querySelector('[data-tab="sheets"]')?.click(); window.viewingParty = false; document.getElementById('view-party-btn')?.click(); renderRemoteSheet(uid); };
             grid2.appendChild(btn2);
         }
     }
@@ -330,9 +348,9 @@ window.getActiveCharMod = function(system, modKey) {
 };
 
 // --- CLICK TO ROLL ENGINE ---
-document.getElementById('dynamic-sheet-container')?.addEventListener('click', (e) => {
+document.addEventListener('click', (e) => {
     const target = e.target.closest('.rollable');
-    if (target && !window.viewingParty) {
+    if (target && !window.viewingParty && document.getElementById('dynamic-sheet-container')?.contains(target)) {
         const statName = target.getAttribute('data-name');
         const modTarget = target.getAttribute('data-mod-target');
         const isAttr = target.getAttribute('data-is-attr') === 'true';
@@ -362,7 +380,7 @@ document.getElementById('dynamic-sheet-container')?.addEventListener('click', (e
         const total = sum + modVal;
         const modString = modVal >= 0 ? `+${modVal}` : `${modVal}`;
         
-        const currentName = document.getElementById('display-username').textContent;
+        const currentName = document.getElementById('display-username')?.textContent || 'User';
         const charNameInput = document.querySelector('input[data-key="name"]');
         const charName = (charNameInput && charNameInput.value) ? charNameInput.value : currentName;
 
@@ -382,7 +400,7 @@ document.getElementById('dynamic-sheet-container')?.addEventListener('click', (e
         if(window.animateDiceRoll2D) window.animateDiceRoll2D(results, 'd'+sides);
         if(results.includes(sides) && window.triggerFireworks) window.triggerFireworks();
         
-        anime({ targets: target, scale: [1.3, 1], duration: 400, easing: 'easeOutElastic(1, .5)' });
+        if(typeof anime !== 'undefined') anime({ targets: target, scale: [1.3, 1], duration: 400, easing: 'easeOutElastic(1, .5)' });
     }
 });
 
@@ -391,130 +409,135 @@ document.getElementById('dynamic-sheet-container')?.addEventListener('click', (e
 window.cropMode = 'avatar';
 window.activeNpcCropId = null;
 
-const cropperOverlay = document.getElementById('crop-modal-overlay');
-const cropperModal = document.getElementById('crop-modal');
-const viewport = document.getElementById('crop-viewport');
-const targetImg = document.getElementById('crop-image-target');
-const zoomSlider = document.getElementById('crop-zoom-slider');
+window.rawUploadedImage = null;
+window.cropScale = 1; window.imgX = 0; window.imgY = 0; window.isDraggingImg = false; window.startX = 0; window.startY = 0;
 
-let rawUploadedImage = null;
-let cropScale = 1, imgX = 0, imgY = 0, isDraggingImg = false, startX = 0, startY = 0;
+document.addEventListener('click', (e) => {
+    if (e.target.closest('#change-avatar-btn')) { window.cropMode = 'avatar'; document.getElementById('avatar-upload')?.click(); }
+    if (e.target.closest('#char-portrait-img')) { window.cropMode = 'character'; document.getElementById('avatar-upload')?.click(); }
+    if (e.target.closest('#cancel-crop-btn')) { 
+        const ov = document.getElementById('crop-modal-overlay'); if (ov) ov.style.display = 'none'; 
+        const md = document.getElementById('crop-modal'); if (md) md.style.display = 'none'; 
+    }
+    if (e.target.closest('#save-crop-btn')) {
+        const canvas = document.createElement('canvas'); canvas.width = 200; canvas.height = 200; const ctx = canvas.getContext('2d');
+        const img = new Image(); img.src = window.rawUploadedImage;
+        img.onload = () => {
+            ctx.clearRect(0, 0, 200, 200); ctx.save(); ctx.beginPath(); ctx.arc(100, 100, 100, 0, Math.PI * 2); ctx.clip(); 
+            const targetImg = document.getElementById('crop-image-target');
+            const w = targetImg.naturalWidth; const h = targetImg.naturalHeight;
+            const drawX = 100 - (w * window.cropScale) / 2 + (window.imgX - (200 - w) / 2);
+            const drawY = 100 - (h * window.cropScale) / 2 + (window.imgY - (200 - h) / 2);
 
-document.getElementById('change-avatar-btn')?.addEventListener('click', () => { window.cropMode = 'avatar'; document.getElementById('avatar-upload').click(); });
-document.getElementById('char-portrait-img')?.addEventListener('click', () => { window.cropMode = 'character'; document.getElementById('avatar-upload').click(); });
-
-document.getElementById('avatar-upload')?.addEventListener('change', (event) => {
-    const file = event.target.files[0];
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onload = (e) => {
-        rawUploadedImage = e.target.result;
-        targetImg.src = rawUploadedImage;
-        targetImg.onload = () => {
-            // Smart Auto-Scale: Perfectly fit the smallest dimension to the 200px circle!
-            const minDimension = Math.min(targetImg.naturalWidth, targetImg.naturalHeight);
-            cropScale = 200 / minDimension; 
+            ctx.drawImage(img, drawX, drawY, w * window.cropScale, h * window.cropScale); ctx.restore();
+            const croppedDataUrl = canvas.toDataURL('image/png');
             
-            // Dynamically adjust slider limits for massive or tiny images
-            if (zoomSlider) {
-                zoomSlider.min = Math.min(0.01, cropScale / 3);
-                zoomSlider.max = Math.max(5, cropScale * 5);
-                zoomSlider.value = cropScale;
+            if (window.cropMode === 'avatar') {
+                const prev = document.getElementById('config-avatar-preview'); if(prev) prev.src = croppedDataUrl; 
+                const ua = document.getElementById('user-avatar'); if(ua) ua.src = croppedDataUrl;
+                localStorage.setItem('appAvatar', croppedDataUrl);
+            } else if (window.cropMode === 'character') {
+                const cp = document.getElementById('char-portrait-img'); if(cp) cp.src = croppedDataUrl;
+                const system = document.getElementById('rpg-system-select').value;
+                const roster = getRoster(system);
+                const charIndex = roster.findIndex(c => c.id === window.activeCharId);
+                if (charIndex > -1) { roster[charIndex].portrait = croppedDataUrl; saveRoster(system, roster); window.saveCharacterSheet(system); }
+            } else if (window.cropMode === 'npc') {
+                const npc = window.npcRoster.find(n => n.id === window.activeNpcCropId);
+                if (npc) { npc.portrait = croppedDataUrl; saveNpcs(); renderNpcs(); }
             }
 
-            imgX = (200 - targetImg.naturalWidth) / 2; 
-            imgY = (200 - targetImg.naturalHeight) / 2;
-            updateImageTransform();
-            
-            if (cropperOverlay && cropperModal) {
-                cropperOverlay.style.display = 'block'; cropperModal.style.display = 'flex';
-            }
+            const ov = document.getElementById('crop-modal-overlay'); if (ov) ov.style.display = 'none'; 
+            const md = document.getElementById('crop-modal'); if (md) md.style.display = 'none';
         };
-    };
-    reader.readAsDataURL(file);
+    }
 });
 
-if (viewport && targetImg) {
-    viewport.addEventListener('mousedown', (e) => { isDraggingImg = true; startX = e.clientX - imgX; startY = e.clientY - imgY; viewport.style.cursor = 'grabbing'; });
-    window.addEventListener('mousemove', (e) => { if (!isDraggingImg) return; imgX = e.clientX - startX; imgY = e.clientY - startY; updateImageTransform(); });
-    window.addEventListener('mouseup', () => { isDraggingImg = false; viewport.style.cursor = 'grab'; });
-    viewport.addEventListener('mouseleave', () => { isDraggingImg = false; viewport.style.cursor = 'grab'; });
-    
-    if (zoomSlider) {
-        zoomSlider.addEventListener('input', (e) => { cropScale = parseFloat(e.target.value); updateImageTransform(); });
+document.addEventListener('change', (event) => {
+    if (event.target.id === 'avatar-upload') {
+        const file = event.target.files[0];
+        if (!file) return;
+        const reader = new FileReader();
+        reader.onload = (e) => {
+            window.rawUploadedImage = e.target.result;
+            const targetImg = document.getElementById('crop-image-target');
+            if (targetImg) {
+                targetImg.src = window.rawUploadedImage;
+                targetImg.onload = () => {
+                    const minDimension = Math.min(targetImg.naturalWidth, targetImg.naturalHeight);
+                    window.cropScale = 200 / minDimension; 
+                    const zoomSlider = document.getElementById('crop-zoom-slider');
+                    if (zoomSlider) {
+                        zoomSlider.min = Math.min(0.01, window.cropScale / 3);
+                        zoomSlider.max = Math.max(5, window.cropScale * 5);
+                        zoomSlider.value = window.cropScale;
+                    }
+                    window.imgX = (200 - targetImg.naturalWidth) / 2; 
+                    window.imgY = (200 - targetImg.naturalHeight) / 2;
+                    updateImageTransform();
+                    
+                    const ov = document.getElementById('crop-modal-overlay'); if (ov) ov.style.display = 'block'; 
+                    const md = document.getElementById('crop-modal'); if (md) md.style.display = 'flex';
+                };
+            }
+        };
+        reader.readAsDataURL(file);
     }
+});
+
+function updateImageTransform() { 
+    const targetImg = document.getElementById('crop-image-target');
+    if (targetImg) targetImg.style.transform = `translate(${window.imgX}px, ${window.imgY}px) scale(${window.cropScale})`; 
 }
-function updateImageTransform() { if (targetImg) targetImg.style.transform = `translate(${imgX}px, ${imgY}px) scale(${cropScale})`; }
 
-document.getElementById('cancel-crop-btn')?.addEventListener('click', () => { cropperOverlay.style.display = 'none'; cropperModal.style.display = 'none'; });
-document.getElementById('save-crop-btn')?.addEventListener('click', () => {
-    const canvas = document.createElement('canvas'); canvas.width = 200; canvas.height = 200; const ctx = canvas.getContext('2d');
-    const img = new Image(); img.src = rawUploadedImage;
-    img.onload = () => {
-        ctx.clearRect(0, 0, 200, 200); ctx.save(); ctx.beginPath(); ctx.arc(100, 100, 100, 0, Math.PI * 2); ctx.clip(); 
-        
-        // Pixel-Perfect math to match CSS visual bounds
-        const w = targetImg.naturalWidth;
-        const h = targetImg.naturalHeight;
-        const drawX = 100 - (w * cropScale) / 2 + (imgX - (200 - w) / 2);
-        const drawY = 100 - (h * cropScale) / 2 + (imgY - (200 - h) / 2);
+document.addEventListener('mousedown', (e) => { 
+    const viewport = document.getElementById('crop-viewport');
+    if (viewport && viewport.contains(e.target)) {
+        window.isDraggingImg = true; window.startX = e.clientX - window.imgX; window.startY = e.clientY - window.imgY; viewport.style.cursor = 'grabbing'; 
+    }
+});
+document.addEventListener('mousemove', (e) => { 
+    if (!window.isDraggingImg) return; window.imgX = e.clientX - window.startX; window.imgY = e.clientY - window.startY; updateImageTransform(); 
+});
+document.addEventListener('mouseup', () => { window.isDraggingImg = false; const v = document.getElementById('crop-viewport'); if(v) v.style.cursor = 'grab'; });
 
-        ctx.drawImage(img, drawX, drawY, w * cropScale, h * cropScale); ctx.restore();
-        const croppedDataUrl = canvas.toDataURL('image/png');
-        
-        if (window.cropMode === 'avatar') {
-            document.getElementById('config-avatar-preview').src = croppedDataUrl; document.getElementById('user-avatar').src = croppedDataUrl;
-            localStorage.setItem('appAvatar', croppedDataUrl);
-        } else if (window.cropMode === 'character') {
-            document.getElementById('char-portrait-img').src = croppedDataUrl;
-            const system = document.getElementById('rpg-system-select').value;
-            const roster = getRoster(system);
-            const charIndex = roster.findIndex(c => c.id === window.activeCharId);
-            if (charIndex > -1) { roster[charIndex].portrait = croppedDataUrl; saveRoster(system, roster); window.saveCharacterSheet(system); }
-        } else if (window.cropMode === 'npc') {
-            const npc = npcRoster.find(n => n.id === window.activeNpcCropId);
-            if (npc) { npc.portrait = croppedDataUrl; saveNpcs(); renderNpcs(); }
-        }
-
-        cropperOverlay.style.display = 'none'; cropperModal.style.display = 'none';
-    };
+document.addEventListener('input', (e) => {
+    if (e.target.id === 'crop-zoom-slider') { window.cropScale = parseFloat(e.target.value); updateImageTransform(); }
 });
 
 // -- NPC MANAGER --
-let npcRoster = JSON.parse(localStorage.getItem('conflict_npcs') || '[]');
-function saveNpcs() { localStorage.setItem('conflict_npcs', JSON.stringify(npcRoster)); }
+window.npcRoster = JSON.parse(localStorage.getItem('conflict_npcs') || '[]');
+function saveNpcs() { localStorage.setItem('conflict_npcs', JSON.stringify(window.npcRoster)); }
 
 window.triggerNpcCrop = function(npcId) {
     window.cropMode = 'npc';
     window.activeNpcCropId = npcId;
-    document.getElementById('avatar-upload').click();
+    document.getElementById('avatar-upload')?.click();
 };
 
 window.deleteNpc = function(id) {
-    npcRoster = npcRoster.filter(n => n.id !== id);
+    window.npcRoster = window.npcRoster.filter(n => n.id !== id);
     saveNpcs(); renderNpcs();
 };
 
 window.spawnNpc = function(id) {
-    const npc = npcRoster.find(n => n.id === id);
+    const npc = window.npcRoster.find(n => n.id === id);
     if (!npc) return;
-    const asset = { id: window.myId + '-' + Math.random().toString(36).substr(2,6), name: npc.name, src: npc.portrait || 'https://via.placeholder.com/50', type: 'token', ownerId: window.myId };
+    const asset = { id: window.myId + '-' + Math.random().toString(36).substr(2,6), name: npc.name, src: npc.portrait || window.defaultAvatar, type: 'token', ownerId: window.myId };
     if (window.placeTokenOnMap) window.placeTokenOnMap(asset, true);
-    
-    // Switch to tabletop to see it
-    document.querySelector('[data-tab="rpg"]').click();
+    document.querySelector('[data-tab="rpg"]')?.click();
 };
 
 function renderNpcs() {
     const grid = document.getElementById('npc-list-grid');
     if(!grid) return;
     grid.innerHTML = '';
-    npcRoster.forEach(npc => {
+    window.npcRoster.forEach(npc => {
         const div = document.createElement('div');
         div.className = 'panel';
         div.style = 'background:rgba(0,0,0,0.4); padding:10px; border-radius:8px; border:1px solid var(--border-color); display:flex; gap:10px; align-items:center;';
         div.innerHTML = `
-            <img src="${npc.portrait || 'https://via.placeholder.com/50'}" style="width:40px;height:40px;border-radius:50%; cursor:pointer; object-fit:cover; border:1px solid var(--accent-main);" onclick="window.triggerNpcCrop('${npc.id}')" title="Click to upload portrait">
+            <img src="${npc.portrait || window.defaultAvatar}" style="width:40px;height:40px;border-radius:50%; cursor:pointer; object-fit:cover; border:1px solid var(--accent-main);" onclick="window.triggerNpcCrop('${npc.id}')" title="Click to upload portrait">
             <div style="flex-grow:1; display:flex; flex-direction:column; gap:4px;">
                 <input type="text" class="kokonut-input npc-input" data-id="${npc.id}" data-field="name" value="${npc.name}" placeholder="NPC Name" style="padding:4px 8px; font-size:12px; width:100%; box-sizing:border-box;">
                 <div style="display:flex; gap:10px; font-size:11px; color:var(--text-muted); align-items:center;">
@@ -528,48 +551,30 @@ function renderNpcs() {
         grid.appendChild(div);
     });
     
-    // Attach autosave listeners
     document.querySelectorAll('.npc-input').forEach(input => {
         input.addEventListener('input', (e) => {
             const id = e.target.getAttribute('data-id');
             const field = e.target.getAttribute('data-field');
-            const npc = npcRoster.find(n => n.id === id);
+            const npc = window.npcRoster.find(n => n.id === id);
             if (npc) { npc[field] = e.target.value; saveNpcs(); }
         });
     });
 }
 
-document.getElementById('add-npc-btn')?.addEventListener('click', () => {
-    npcRoster.push({ id: Math.random().toString(36).substr(2,9), name: 'New Goblin', hp: 7, ac: 15, portrait: null });
-    saveNpcs(); renderNpcs();
-});
-
-// Instant Spawn Player Token Button
-document.getElementById('spawn-char-token-btn')?.addEventListener('click', () => {
-    const sys = document.getElementById('rpg-system-select').value;
-    const roster = getRoster(sys);
-    const activeChar = roster.find(c => c.id === window.activeCharId);
-    
-    if (!activeChar || !activeChar.portrait) return alert("Please click your portrait above and upload an image first!");
-    
-    const asset = { id: window.myId + '-' + window.activeCharId, name: activeChar.name, src: activeChar.portrait, type: 'token', ownerId: window.myId };
-    if (window.placeTokenOnMap) window.placeTokenOnMap(asset, true);
-    
-    document.querySelector('[data-tab="rpg"]').click();
-});
-
-// INITIALIZE
-// INITIALIZE
-if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', () => {
-        const initialSys = document.getElementById('rpg-system-select')?.value || 'dnd';
-        updateRosterDropdown(initialSys);
-        if (window.updateTabletopRoller) window.updateTabletopRoller(initialSys);
-        renderCharacterSheet();
-    });
-} else {
-    const initialSys = document.getElementById('rpg-system-select')?.value || 'dnd';
+function initRPG() {
+    const sysSelect = document.getElementById('rpg-system-select');
+    if (sysSelect) {
+        sysSelect.disabled = false;
+        sysSelect.title = "Select your system";
+    }
+    const initialSys = sysSelect?.value || 'dnd';
     updateRosterDropdown(initialSys);
     if (window.updateTabletopRoller) window.updateTabletopRoller(initialSys);
     renderCharacterSheet();
+}
+
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', initRPG);
+} else {
+    initRPG();
 }
