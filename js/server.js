@@ -1,0 +1,65 @@
+const http = require('http');
+const WebSocket = require('ws');
+const fs = require('fs');
+const path = require('path');
+const os = require('os');
+const localtunnel = require('localtunnel');
+
+let wss = null; let server = null; let tunnelProcess = null;
+
+function getLocalIp() {
+    const interfaces = os.networkInterfaces();
+    for (const name of Object.keys(interfaces)) {
+        for (const iface of interfaces[name]) {
+            if (iface.family === 'IPv4' && !iface.internal) return iface.address;
+        }
+    }
+    return '127.0.0.1';
+}
+
+function startLocalServer(baseDir) {
+    server = http.createServer((req, res) => {
+        let filePath = path.join(baseDir, req.url === '/' ? 'index.html' : req.url);
+        let extname = String(path.extname(filePath)).toLowerCase();
+        let mimeTypes = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.png': 'image/png' };
+        
+        fs.readFile(filePath, (error, content) => {
+            if (error) {
+                fs.readFile(path.join(baseDir, 'index.html'), (err, data) => {
+                    res.writeHead(200, { 'Content-Type': 'text/html' }); res.end(data, 'utf-8');
+                });
+            } else {
+                res.writeHead(200, { 'Content-Type': mimeTypes[extname] || 'application/octet-stream' }); res.end(content, 'utf-8');
+            }
+        });
+    });
+
+    wss = new WebSocket.Server({ server });
+    wss.on('connection', (ws) => {
+        ws.on('message', (msg) => {
+            wss.clients.forEach(client => { if (client !== ws && client.readyState === WebSocket.OPEN) client.send(msg.toString()); });
+        });
+        ws.on('error', (err) => console.error('Client socket error:', err.message));
+    });
+    server.listen(8080);
+    return { server, wss, lanIp: `${getLocalIp()}:8080` };
+}
+
+async function startHostTunnel() {
+    let tunnel = null; let shareCode = null;
+    for (let i = 0; i < 3 && !tunnel; i++) {
+        const code = Math.random().toString(36).substring(2, 8);
+        try {
+            tunnel = await new Promise((res, rej) => localtunnel({ port: 8080, subdomain: `conflict-${code}` }, (err, t) => err ? rej(err) : res(t)));
+            shareCode = code;
+        } catch (err) { continue; }
+    }
+    if (tunnel) tunnelProcess = tunnel;
+    return { fullUrl: tunnel ? tunnel.url : null, shareCode };
+}
+
+function stopServer() {
+    if (tunnelProcess) tunnelProcess.close();
+    if (server) server.close();
+}
+module.exports = { startLocalServer, startHostTunnel, stopServer };
