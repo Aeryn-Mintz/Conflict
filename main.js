@@ -1,11 +1,11 @@
-const { app, BrowserWindow, ipcMain, desktopCapturer, session } = require('electron');
+const { app, BrowserWindow, ipcMain, desktopCapturer, session, dialog } = require('electron');const { autoUpdater } = require('electron-updater');
 const path = require('path');
 const http = require('http');
-const os = require('os'); // <--- ADD THIS LINE
+const os = require('os'); 
 const fs = require('fs');
 const WebSocket = require('ws');
 const { spawn } = require('child_process');
-const localtunnel = require('localtunnel'); // ADD THIS LINE
+const localtunnel = require('localtunnel'); 
 let tunnelProcess = null;
 
 let mainWindow;
@@ -156,7 +156,32 @@ function createWindow() {
     });
 }
 
-app.whenReady().then(createWindow);
+app.whenReady().then(() => {
+    createWindow();
+
+    // Check for updates from GitHub silently in the background
+    autoUpdater.checkForUpdatesAndNotify();
+});
+
+// Listen for the download to finish, then prompt the user
+autoUpdater.on('update-downloaded', () => {
+    dialog.showMessageBox({
+        type: 'info',
+        title: 'Update Available',
+        message: 'A new version of Conflict has been downloaded! Restart the app to install it?',
+        buttons: ['Restart and Install', 'Later']
+    }).then((result) => {
+        if (result.response === 0) {
+            autoUpdater.quitAndInstall();
+        }
+    });
+});
+
+app.on('window-all-closed', () => {
+    if (tunnelProcess) tunnelProcess.close(); 
+    if (server) server.close();
+    if (process.platform !== 'darwin') app.quit();
+});
 
 ipcMain.on('start-host', async (event) => {
     let tunnel = null;
@@ -191,11 +216,4 @@ ipcMain.on('start-host', async (event) => {
         tunnelProcess = tunnel;
         tunnel.on('close', () => console.log('Localtunnel closed'));
     }
-});
-
-// Update the cleanup code (around lines 115-118) to:
-app.on('window-all-closed', () => {
-    if (tunnelProcess) tunnelProcess.close(); // Close localtunnel properly
-    if (server) server.close();
-    if (process.platform !== 'darwin') app.quit();
 });

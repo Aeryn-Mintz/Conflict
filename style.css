@@ -1,30 +1,51 @@
+/* --- DYNAMIC KOKONUT COLORS & NEW FUN FONT --- */
+@import url('https://fonts.googleapis.com/css2?family=Nunito:ital,wght@0,400;0,600;0,700;0,900;1,400&display=swap');
+
 :root {
-    --bg-base: #050a06; 
-    --panel-bg: rgba(13, 26, 16, 0.75); 
-    --border-color: #1a3b22; 
-    --text-main: #ecfdf5; 
-    --text-muted: #8eb397; 
+    --bg-base: #030504; 
+    --panel-bg: rgba(10, 20, 14, 0.65); 
+    --border-color: rgba(255, 255, 255, 0.08); 
+    --text-main: #f8fafc; 
+    --text-muted: #94a3b8; 
     --accent-main: #10b981; 
     --accent-hover: #059669; 
     --accent-alert: #ef4444; 
 }
 
-body {
+body { 
+    /* NEW FONT APPLIED HERE */
+    font-family: 'Nunito', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
     background-color: var(--bg-base);
     color: var(--text-main);
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-    margin: 0;
-    padding: 0;
-    height: 100vh;
-    overflow: hidden; 
-    user-select: none; 
-    background-image: radial-gradient(circle at 50% -20%, rgba(16, 185, 129, 0.08), transparent 60%);
+    margin: 0; padding: 0; height: 100vh; overflow: hidden; user-select: none; 
+    background-image: 
+        radial-gradient(circle at top right, color-mix(in srgb, var(--accent-main) 15%, transparent), transparent 50%), 
+        radial-gradient(circle at bottom left, color-mix(in srgb, var(--accent-main) 10%, transparent), transparent 50%); 
 }
 
-::-webkit-scrollbar { width: 8px; height: 8px; }
-::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb { background: #3f3f46; border-radius: 4px; }
-::-webkit-scrollbar-thumb:hover { background: #52525b; }
+/* --- CLICK TO ROLL ANIMATIONS --- */
+.rollable {
+    cursor: pointer;
+    transition: color 0.2s, transform 0.2s;
+    display: inline-block;
+    position: relative;
+}
+.rollable:hover {
+    color: var(--accent-main);
+    transform: scale(1.1);
+    text-shadow: 0 0 8px color-mix(in srgb, var(--accent-main) 50%, transparent);
+}
+.rollable::after {
+    content: "🎲";
+    position: absolute;
+    top: -10px; right: -15px;
+    font-size: 10px;
+    opacity: 0;
+    transition: opacity 0.2s;
+}
+.rollable:hover::after { opacity: 1; }
+
+
 
 .conflict-app {
     display: flex;
@@ -136,11 +157,46 @@ body {
     text-transform: uppercase;
 }
 
+body { 
+    background-image: 
+        radial-gradient(circle at top right, color-mix(in srgb, var(--accent-main) 15%, transparent), transparent 50%), 
+        radial-gradient(circle at bottom left, color-mix(in srgb, var(--accent-main) 10%, transparent), transparent 50%); 
+}
+
 .brand-icon-img {
-    width: 28px;
-    height: 28px;
-    object-fit: contain;
-    filter: drop-shadow(0 0 10px rgba(16, 185, 129, 0.6));
+    width: 28px; height: 28px; object-fit: contain;
+    filter: drop-shadow(0 0 10px var(--accent-main));
+}
+
+.glow-btn { box-shadow: 0 0 15px color-mix(in srgb, var(--accent-main) 40%, transparent); }
+.glow-btn:hover { box-shadow: 0 0 25px color-mix(in srgb, var(--accent-main) 80%, transparent); filter: brightness(1.1); }
+
+
+
+
+/* --- FOLDER TABS --- */
+.tab-container {
+    display: flex; margin-bottom: 20px; gap: 4px;
+    border-bottom: 2px solid var(--border-color); 
+}
+.tab-btn {
+    background: rgba(0,0,0,0.3);
+    border: 1px solid var(--border-color);
+    border-bottom: none; 
+    border-radius: 12px 12px 0 0; 
+    color: var(--text-muted);
+    padding: 12px 24px;
+    font-size: 13px; font-weight: 700;
+    cursor: pointer; transition: all 0.2s;
+    margin-bottom: -2px; /* Pull down to seamlessly cover the border */
+}
+.tab-btn:hover { background: rgba(0,0,0,0.5); color: var(--text-main); }
+.tab-btn.active { 
+    background: var(--panel-bg);
+    color: var(--accent-main); 
+    border: 2px solid var(--border-color);
+    border-bottom: 2px solid var(--panel-bg); 
+    box-shadow: 0 -4px 15px rgba(0,0,0,0.2);
 }
 
 .sidebar-section { margin-bottom: 30px; }
@@ -232,31 +288,82 @@ input[type="text"]:focus, input[type="number"]:focus { border-color: var(--accen
 #chat-input-row { display: flex; gap: 8px; }
 #chat-input-row input { flex-grow: 1; }
 
-/* Tabs */
-.tab-container {
-    display: flex;
-    margin-bottom: 20px;
-    border-bottom: 1px solid var(--border-color);
-}
-.tab-btn {
-    background: transparent;
-    border: none;
-    color: var(--text-muted);
-    padding: 12px 20px;
-    font-size: 14px;
-    font-weight: 600;
-    cursor: pointer;
-    position: relative;
-}
-.tab-btn.active { color: var(--accent-main); }
-.tab-btn.active::after {
-    content: '';
-    position: absolute;
-    bottom: -1px; left: 0; right: 0;
-    height: 2px;
-    background: var(--accent-main);
+/* --- KOKONUT UI AESTHETICS --- */
+:root {
+    --bg-base: #030504; 
+    --panel-bg: rgba(10, 20, 14, 0.65); 
+    --border-color: rgba(255, 255, 255, 0.08); 
+    --text-main: #f8fafc; 
+    --text-muted: #94a3b8; 
+    --accent-main: #10b981; 
+    --accent-hover: #059669; 
+    --accent-alert: #ef4444; 
 }
 
+body { background-image: radial-gradient(circle at top right, rgba(16, 185, 129, 0.15), transparent 50%), radial-gradient(circle at bottom left, rgba(5, 150, 105, 0.1), transparent 50%); }
+
+.glass-panel {
+    background: var(--panel-bg);
+    border: 1px solid var(--border-color);
+    backdrop-filter: blur(24px);
+    -webkit-backdrop-filter: blur(24px);
+    border-radius: 16px;
+    box-shadow: 0 4px 30px rgba(0, 0, 0, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.05);
+    padding: 20px;
+}
+
+/* Floating Window UI */
+.absolute-layout { position: relative; width: 100%; height: 100%; overflow: hidden; }
+.base-panel { position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 1; }
+.floating-panel {
+    position: absolute;
+    z-index: 50;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    resize: both;
+    overflow: hidden;
+    min-width: 250px;
+    min-height: 100px;
+    box-shadow: 0 20px 40px rgba(0,0,0,0.8), inset 0 1px 0 rgba(255, 255, 255, 0.1);
+}
+
+.drag-handle {
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 12px 20px; background: rgba(0,0,0,0.4);
+    border-bottom: 1px solid var(--border-color);
+    cursor: grab; user-select: none;
+}
+.drag-handle:active { cursor: grabbing; }
+.drag-handle h3 { margin: 0; font-size: 14px; letter-spacing: 0.5px; }
+.drag-handle .grip { color: var(--text-muted); font-weight: bold; }
+.panel-content { padding: 20px; flex-grow: 1; overflow-y: auto; }
+
+/* Kokonut Inputs & Buttons */
+.kokonut-btn {
+    transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+    border-radius: 10px;
+    font-weight: 600;
+}
+.kokonut-btn:active { transform: scale(0.95); }
+
+
+.kokonut-input {
+    background: rgba(0,0,0,0.2) !important;
+    border: 1px solid rgba(255,255,255,0.1) !important;
+    border-radius: 10px !important;
+    transition: border 0.3s, box-shadow 0.3s;
+}
+.kokonut-input:focus { border-color: var(--accent-main) !important; box-shadow: 0 0 0 2px rgba(16,185,129,0.2); }
+
+.kokonut-toolbar { display: flex; justify-content: space-between; padding: 12px 20px; align-items: center; margin-bottom: 15px; }
+
+/* Custom Scrollbars */
+/* Custom Scrollbars */
+::-webkit-scrollbar, .kokonut-scroll::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track, .kokonut-scroll::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb, .kokonut-scroll::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 10px; }
+::-webkit-scrollbar-thumb:hover, .kokonut-scroll::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.3); }
 /* Tabletop & Canvas */
 .canvas-container {
     position: relative;
@@ -658,3 +765,6 @@ input[type="text"]:focus, input[type="number"]:focus { border-color: var(--accen
     border-color: var(--accent-main);
 }
 .skill-item span { display: flex; align-items: center; }
+/* Custom Daggerheart Dice Colors */
+.dh-hope { background: radial-gradient(circle at 30% 30%, #3b82f6, #1e3a8a) !important; border-color: #1e3a8a !important; }
+.dh-fear { background: radial-gradient(circle at 30% 30%, #eab308, #854d0e) !important; border-color: #713f12 !important; }

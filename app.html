@@ -8,35 +8,23 @@
 </head>
 <body>
     <div class="conflict-app">
-        
         <!-- SIDEBAR -->
-        <aside class="sidebar">
-            <div class="brand">
-                <img src="./conflict-logo.png" alt="Logo" class="brand-icon-img"> 
-                Conflict
-            </div>
-
+        <aside class="sidebar z-high">
+            <div class="brand"><img src="./conflict-logo.png" alt="Logo" class="brand-icon-img"> Conflict</div>
             <div class="sidebar-section">
                 <h4>My Profile</h4>
-                <div class="user-card" id="user-1" style="background: transparent; padding: 0;">
-                    <div class="avatar-wrapper">
-                        <img src="https://via.placeholder.com/50" id="user-avatar" class="avatar" alt="Avatar">
-                    </div>
-                    <div class="user-info">
-                        <span class="username" id="display-username">You</span>
-                    </div>
+                <div class="user-card kokonut-card" id="user-1">
+                    <div class="avatar-wrapper"><img src="https://via.placeholder.com/50" id="user-avatar" class="avatar" alt="Avatar"></div>
+                    <div class="user-info"><span class="username" id="display-username">You</span></div>
                 </div>
-                <button id="settings-btn" class="outline-btn" style="margin-top: 10px; width: 100%;">⚙️ User Settings</button>
-                <button id="leave-room-btn" class="outline-btn" style="margin-top: 8px; width: 100%; color: var(--accent-alert); border-color: var(--accent-alert);">🚪 Leave Room</button>   
+                <button id="settings-btn" class="outline-btn mt-3 w-full kokonut-btn" style="margin-top: 10px; width: 100%;">⚙️ User Settings</button>
+                <button id="leave-room-btn" class="outline-btn alert-btn mt-2 w-full kokonut-btn" style="margin-top: 8px; width: 100%; color: var(--accent-alert); border-color: var(--accent-alert);">🚪 Leave Room</button>   
             </div>
-
             <div class="sidebar-section">
-                <div class="panel-header-row" style="display: flex; justify-content: space-between; align-items: center;">
-                    <h4>Soundboard</h4>
-                </div>
-                <input type="range" id="effectsVolumeSlider" min="0" max="1" step="0.01" value="0.8" title="Effects Volume" style="width: 100%; margin-bottom: 10px;">
-                <input type="file" id="add-sound-upload" accept="audio/mp3, audio/wav, audio/ogg" style="display: none;">
-                <button id="add-sound-btn" class="secondary-btn" style="width: 100%; font-size: 12px;">+ Add Sound (Max 5s)</button>
+                <div class="panel-header-row"><h4>Soundboard</h4></div>
+                <input type="range" id="effectsVolumeSlider" min="0" max="1" step="0.01" value="0.8" class="kokonut-slider w-full mb-3" style="width: 100%; margin-bottom: 10px;">
+                <input type="file" id="add-sound-upload" accept="audio/*" style="display: none;">
+                <button id="add-sound-btn" class="secondary-btn w-full mb-2 kokonut-btn text-xs" style="width: 100%; font-size: 12px;">+ Add Sound (Max 5s)</button>
                 <div id="soundboard-buttons" class="button-grid"></div>
             </div>
         </aside>
@@ -44,243 +32,257 @@
         <!-- MAIN VIEW AREA -->
         <main class="main-content">
             <!-- Navigation Tabs -->
-            <div class="tab-container">
-                <button class="tab-btn active" data-tab="main">Main</button>
-                <button class="tab-btn" data-tab="rpg">RPG Tabletop</button>
-                <button class="tab-btn" data-tab="sheets">Character Sheets</button>
+            <div class="tab-container z-high">
+                <button class="tab-btn active kokonut-tab" data-tab="main">Main Stage</button>
+                <button class="tab-btn kokonut-tab" data-tab="rpg">RPG Tabletop</button>
+                <button class="tab-btn kokonut-tab" data-tab="sheets">Character Vault</button>
+                <!-- DM ONLY TAB -->
+                <button id="tab-dm-btn" class="tab-btn kokonut-tab" data-tab="dm" style="display: none; color: #fbbf24; border-color: #fbbf24;">👑 DM Screen</button>
             </div>
 
             <!-- TAB 1: MAIN VIEW -->
-            <div id="main-view" class="content-wrapper">
-                <div class="top-row">
-                    <section class="panel glass-panel" id="video-grid" style="flex-grow: 1;">
-                        <div class="panel-header" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
-                            <h3>Live Stage</h3>
-                            <div class="action-row" style="margin: 0; display: flex; gap: 8px;">
-                                <button id="join-voice-btn" class="primary-btn">🎙️ Join Call</button>
-                                <button id="mute-mic-btn" class="secondary-btn" disabled>🔇 Mute</button>
-                                <button id="toggle-cam-btn" class="secondary-btn">📷 Camera</button>
-                                <button id="share-screen-btn" class="secondary-btn">💻 Share Screen</button>
-                            </div>
+            <div id="main-view" class="content-wrapper absolute-layout">
+                <section class="panel glass-panel floating-panel" id="video-grid" style="top: 20px; left: 20px; width: 55%; height: 60vh; min-width: 400px; min-height: 350px;">
+                    <div class="drag-handle"><h3 style="margin: 0;">Live Stage</h3><span class="grip">≡</span></div>
+                    <div class="panel-content" style="display: flex; flex-direction: column;">
+                        <div class="action-row" style="margin-bottom: 15px; display: flex; gap: 8px; flex-wrap: wrap;">
+                            <button id="join-voice-btn" class="primary-btn kokonut-btn glow-btn">🎙️ Join Call</button>
+                            <button id="mute-mic-btn" class="secondary-btn kokonut-btn" disabled>🔇 Mute</button>
+                            <button id="toggle-cam-btn" class="secondary-btn kokonut-btn">📷 Camera</button>
+                            <button id="share-screen-btn" class="secondary-btn kokonut-btn">💻 Share Screen</button>
                         </div>
                         <p id="voice-status" class="status-text" style="display: none;"></p>
-                        
-                        <!-- Local Videos -->
-                        <video id="local-cam-video" autoplay playsinline muted style="display: none; width: 100%; max-height: 400px; border-radius: 8px; margin-top: 15px; object-fit: contain; background: #000; transform: scaleX(-1);"></video>
-                        <video id="local-screen-video" autoplay playsinline muted style="display: none; width: 100%; border-radius: 8px; margin-top: 15px;"></video>
-                        <div id="remote-audio-container"></div>
-                    </section>
-                </div>
+                        <div id="remote-audio-container" style="display: flex; flex-grow: 1; gap: 10px; flex-wrap: wrap; align-items: center; justify-content: center;">
+                            <video id="local-cam-video" autoplay playsinline muted style="display: none; width: 100%; max-height: 100%; border-radius: 8px; object-fit: contain; background: rgba(0,0,0,0.5); transform: scaleX(-1);"></video>
+                            <video id="local-screen-video" autoplay playsinline muted style="display: none; width: 100%; max-height: 100%; border-radius: 8px; object-fit: contain; background: rgba(0,0,0,0.5);"></video>
+                        </div>
+                    </div>
+                </section>
 
-                <div class="bottom-row">
-                    <section class="panel glass-panel bot-panel">
-                        <div class="panel-header-row" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
-                            <h3>Media Player</h3>
-                            <div style="display: flex; gap: 8px;">
-                                <button id="yt-playpause-btn" class="icon-btn" title="Play/Pause for everyone">⏯️</button>
-                                <button id="yt-skip-btn" class="icon-btn" title="Skip to Next Video">⏭️</button>
-                                <button id="toggle-queue-btn" class="icon-btn" title="Toggle Queue Playlist">📜 Queue</button>
-                                <button id="toggle-yt-view" class="icon-btn" title="Minimize/Maximize Video">👁️</button>
-                            </div>
+                <section class="panel glass-panel floating-panel" id="drag-media" style="top: 80px; right: 30px; width: 380px;">
+                    <div class="drag-handle"><h3>Media Player</h3><span class="grip">≡</span></div>
+                    <div class="panel-content">
+                        <div style="display: flex; gap: 8px; margin-bottom: 10px;">
+                            <button id="yt-playpause-btn" class="icon-btn kokonut-btn">⏯️</button>
+                            <button id="yt-skip-btn" class="icon-btn kokonut-btn">⏭️</button>
+                            <button id="toggle-queue-btn" class="icon-btn kokonut-btn">📜 Queue</button>
+                            <button id="toggle-yt-view" class="icon-btn kokonut-btn">👁️</button>
                         </div>
-                        <div class="bot-search-row">
-                            <input type="text" id="yt-url-input" placeholder="Paste YouTube Link or Playlist...">
-                            <button id="yt-queue-add-btn" class="secondary-btn" title="Add to Queue">+ Queue</button>
-                            <button id="yt-play-btn" class="primary-btn">Play Now</button>
+                        <div class="bot-search-row" style="display: flex; gap: 10px;">
+                            <input type="text" id="yt-url-input" class="kokonut-input" placeholder="YouTube Link..." style="flex-grow: 1;">
+                            <button id="yt-queue-add-btn" class="secondary-btn kokonut-btn">+Q</button>
+                            <button id="yt-play-btn" class="primary-btn kokonut-btn">Play</button>
                         </div>
-                        
-                        <!-- Playlist Queue Dropdown Drawer -->
-                        <div id="yt-queue-drawer" class="yt-queue-container">
-                            <div style="padding: 6px 12px; font-size: 11px; text-transform: uppercase; color: var(--text-muted); border-bottom: 1px solid var(--border-color); display: flex; justify-content: space-between;">
-                                <span>Up Next Queue</span>
-                                <span id="queue-count">0 items</span>
-                            </div>
+                        <div id="yt-queue-drawer" class="yt-queue-container" style="display: none; flex-direction: column; margin-top: 10px;">
+                            <div class="queue-header" style="display: flex; justify-content: space-between; font-size: 11px; text-transform: uppercase; color: var(--text-muted); border-bottom: 1px solid var(--border-color); padding: 6px 12px;"><span>Up Next Queue</span><span id="queue-count">0 items</span></div>
                             <div id="yt-queue-list"></div>
                         </div>
+                        <div id="yt-wrapper" style="display: none; flex-grow: 1; margin-top: 15px;"><div id="yt-iframe"></div></div>
+                    </div>
+                </section>
 
-                        <div id="yt-wrapper" style="margin-top: 15px; border-radius: 8px; overflow: hidden; border: 1px solid var(--border-color); display: none; flex-grow: 1;">
-                            <div id="yt-iframe"></div>
+                <section class="panel glass-panel floating-panel" id="drag-chat" style="bottom: 30px; right: 30px; width: 350px; height: 400px;">
+                    <div class="drag-handle"><h3>Room Chat</h3><span class="grip">≡</span></div>
+                    <div class="panel-content" style="display: flex; flex-direction: column; height: calc(100% - 40px);">
+                        <div id="chat-messages" class="kokonut-scroll" style="flex-grow: 1; overflow-y: auto; margin-bottom: 15px;"></div>
+                        <div id="chat-input-row" style="display: flex; gap: 8px; margin-top: auto;">
+                            <input type="text" id="chat-input" class="kokonut-input" placeholder="Message..." style="flex-grow: 1;">
+                            <button id="chat-send-btn" class="primary-btn kokonut-btn glow-btn">Send</button>
                         </div>
-                    </section>
-
-                    <section class="panel glass-panel chat-area">
-                        <h3>Room Chat</h3>
-                        <div id="chat-messages"></div>
-                        <div id="chat-input-row">
-                            <input type="text" id="chat-input" placeholder="Message the room...">
-                            <button id="chat-send-btn" class="primary-btn">Send</button>
-                        </div>
-                    </section>
-                </div>
-                
-                <section class="panel glass-panel call-area" style="margin-top: 20px;">
-                    <h3>Connected Users</h3>
+                    </div>
                 </section>
             </div>
 
             <!-- TAB 2: RPG TABLETOP VIEW -->
             <div id="rpg-view" class="content-wrapper" style="display: none; position: relative;">
-                
-                <!-- VTT Master Toolbar -->
-                <div class="panel glass-panel" style="display: flex; justify-content: space-between; align-items: center; padding: 10px 20px; flex-wrap: wrap; gap: 10px;">
-                    
-                    <!-- Player Tools -->
-                    <div class="dice-controls" style="margin: 0; align-items: center; display: flex; gap: 8px;">
-                        <button id="toggle-tokens-btn" class="secondary-btn">🎒 Tokens & Stamps</button>
-                        <span style="font-weight: bold; font-size: 14px; margin-left: 10px;">🎲 Roll:</span>
-                        <input type="number" id="dice-count" value="1" min="1" max="10" style="width: 50px; padding: 6px; text-align: center; border-radius: 6px; border: 1px solid var(--border-color); background: rgba(0,0,0,0.3); color: var(--text-main);">
-                        <select id="dice-type" class="config-select" style="width: 70px; margin: 0; padding: 6px; border-radius: 6px;">
-                            <option value="d4">d4</option>
-                            <option value="d6">d6</option>
-                            <option value="d8">d8</option>
-                            <option value="d10">d10</option>
-                            <option value="d12">d12</option>
-                            <option value="d20" selected>d20</option>
-                            <option value="d100">d100</option>
+                <div class="panel glass-panel z-high kokonut-toolbar" style="display: flex; justify-content: space-between; align-items: center; padding: 10px 20px; flex-wrap: wrap; gap: 10px;">
+                    <div style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
+                        <button id="toggle-tokens-btn" class="secondary-btn kokonut-btn">🎒 Assets</button>
+                        <div style="width: 1px; height: 20px; background: var(--border-color);"></div>
+                        <select id="rpg-system-select" class="config-select kokonut-select" style="width: 130px; padding: 4px; font-size: 11px;" disabled title="Only DM can change system">
+                            <option value="dnd">D&D 5e</option><option value="daggerheart">Daggerheart</option><option value="aquelarre">Aquelarre</option><option value="assimilacao">Assimilação RPG</option><option value="vampire">Vampire: TM</option>
                         </select>
-                        <button id="roll-dice-btn" class="primary-btn" style="padding: 6px 12px;">Toss</button>
+                        <button id="dm-force-system" class="outline-btn kokonut-btn" style="display: none; padding: 4px 8px; font-size: 11px; border-color: #fbbf24; color: #fbbf24;">Broadcast</button>
+                        <div style="width: 1px; height: 20px; background: var(--border-color);"></div>
+                        <div id="dynamic-dice-controls" style="display: flex; gap: 8px; align-items: center;"></div>
                     </div>
-
-                    <!-- DM Tools -->
-                    <div style="display: flex; gap: 8px; align-items: center; border-left: 1px solid var(--border-color); padding-left: 15px;">
-                        <button id="claim-dm-btn" class="outline-btn" style="border-color: #fbbf24; color: #fbbf24;">👑 Claim DM</button>
+                    <div class="dm-tools" style="display: flex; gap: 8px; align-items: center; border-left: 1px solid var(--border-color); padding-left: 15px;">
+                        <button id="claim-dm-btn" class="outline-btn kokonut-btn dm-btn" style="border-color: #fbbf24; color: #fbbf24;">👑 Claim DM</button>
                         <div id="dm-controls" style="display: none; gap: 8px;">
-                            <button id="toggle-fog-btn" class="secondary-btn">🌫️ Enable Fog</button>
-                            <button id="restore-map-btn" class="outline-btn" style="display: none;">↺ Last Map</button>
-                            <button id="map-upload-btn" class="secondary-btn">🗺️ Set Map</button>
+                            <button id="toggle-fog-btn" class="secondary-btn kokonut-btn">🌫️ Fog</button>
+                            <button id="restore-map-btn" class="outline-btn kokonut-btn" style="display: none;">↺ Last Map</button>
+                            <button id="map-upload-btn" class="secondary-btn kokonut-btn">🗺️ Set Map</button>
                             <input type="file" id="map-file-input" accept="image/*" style="display: none;">
                         </div>
                     </div>
                 </div>
 
-                <!-- Floating Asset Panel -->
-                <div id="floating-token-panel" class="panel glass-panel" style="display: none; position: absolute; left: 20px; top: 70px; z-index: 100; width: 300px; box-shadow: 5px 10px 30px rgba(0,0,0,0.6);">
-                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
-                        <h3 style="margin: 0; font-size: 15px;">Token Library</h3>
+                <div id="floating-token-panel" class="panel glass-panel floating-panel" style="display: none; left: 20px; top: 90px; width: 300px;">
+                    <div class="drag-handle"><h3 style="margin: 0; font-size: 15px;">Asset Library</h3><span class="grip">≡</span></div>
+                    <div class="panel-content">
                         <input type="file" id="token-upload" accept="image/*" style="display: none;">
-                        <button id="add-token-btn" class="outline-btn" style="padding: 4px 8px; font-size: 11px;">+ Upload</button>
+                        <button id="add-token-btn" class="outline-btn kokonut-btn" style="width: 100%; margin-bottom: 10px;">+ Upload Token</button>
+                        <div id="token-library" class="button-grid kokonut-scroll" style="max-height: 250px; overflow-y: auto;"></div>
                     </div>
-                    <div id="token-library" class="button-grid" style="max-height: 300px; overflow-y: auto;"></div>
                 </div>
 
-       <!-- Advanced Layered Tabletop (SCROLLABLE) -->
                 <div class="canvas-container" id="tabletop-container" style="height: 60vh; position: relative; overflow: hidden;">
-                    
-                    <!-- THE SCROLLABLE AREA -->
                     <div id="vtt-scroll-area" style="width: 100%; height: 100%; overflow: auto; cursor: grab; position: relative;">
-                        
-                        <!-- THE GIANT MAP LAYER (3000x3000) -->
                         <div id="vtt-map-layer" style="width: 3000px; height: 3000px; position: relative; background-size: contain; background-position: center; background-repeat: no-repeat;">
-                                                       
-                            <!-- Layer 2: The Grid -->
                             <div class="css-grid-bg" style="width: 100%; height: 100%; z-index: 2;"></div>
-                            
-                            <!-- Layer 3: Ink Canvas -->
                             <canvas id="shared-canvas" style="position: absolute; top: 0; left: 0; z-index: 3;"></canvas>
-                            
-                            <!-- Layer 4: Character Tokens -->
                             <div id="token-layer" style="position: absolute; top: 0; left: 0; right: 0; bottom: 0; pointer-events: none; z-index: 4;"></div>
-                            
-                            <!-- Layer 5: Fog of War -->
                             <canvas id="fog-canvas" style="position: absolute; top: 0; left: 0; z-index: 5; pointer-events: none; opacity: 1.0;"></canvas>
-                            
-                            <!-- Layer 6: 2D Dice -->
-                            <div id="dice-layer" style="position: absolute; top: 0; left: 0; right: 0; bottom: 0; pointer-events: none; z-index: 20;"></div>
                         </div>
                     </div>
                     
-                    <!-- Drawing Tools (Fixed at bottom) -->
-                    <div class="canvas-tools" style="z-index: 25; position: absolute; bottom: 15px; left: 50%; transform: translateX(-50%);">
-                        <button id="pen-tool" class="tool-btn active">🖊️ Pen</button>
-                        <button id="fog-brush-tool" class="tool-btn" style="display: none;">🔦 Reveal Fog</button>
-                        <button id="eraser-tool" class="tool-btn">🧽 Eraser</button>
-                        <button id="clear-canvas-btn" class="tool-btn">🗑️ Clear Ink</button>
-                        <input type="color" id="stroke-color" value="#10b981">
-                        <input type="range" id="stroke-width" min="1" max="50" value="2">
+                    <!-- DICE LAYER OVERLAY: Moved outside the map so it stays perfectly centered on your screen! -->
+                    <div id="dice-layer" style="position: absolute; top: 0; left: 0; right: 0; bottom: 0; pointer-events: none; z-index: 20;"></div>
+                    
+                    <div class="canvas-tools glass-panel floating-tools" style="z-index: 25; position: absolute; bottom: 15px; left: 50%; transform: translateX(-50%); display: flex; align-items: center; gap: 8px;">
+                        <button id="pen-tool" class="tool-btn active kokonut-btn">🖊️</button>
+                        <button id="fog-brush-tool" class="tool-btn kokonut-btn" style="display: none;">🔦</button>
+                        <button id="eraser-tool" class="tool-btn kokonut-btn">🧽</button>
+                        <button id="clear-canvas-btn" class="tool-btn kokonut-btn alert-text">🗑️</button>
+                        <input type="color" id="stroke-color" value="#10b981" class="color-dot">
+                        <input type="range" id="stroke-width" min="1" max="50" value="2" class="kokonut-slider" style="width: 80px;">
                     </div>
                 </div>
-            </div> <!-- THIS CLOSING DIV WAS MISSING: It closes the rpg-view tab -->
+            </div> 
 
-            <!-- TAB 3: CHARACTER SHEETS VIEW -->
+            <!-- TAB 3: CHARACTER VAULT -->
             <div id="sheets-view" class="content-wrapper" style="display: none; height: 100%; flex-direction: column; overflow: hidden;">
-                <div class="panel glass-panel" style="display: flex; justify-content: space-between; align-items: center; padding: 15px 20px; flex-shrink: 0;">
-                    <h3>Character Vault</h3>
-                    <div style="display: flex; align-items: center; gap: 15px;">
+                <div class="panel glass-panel" style="display: flex; justify-content: space-between; align-items: center; padding: 15px 20px; flex-shrink: 0; flex-wrap: wrap; gap: 10px;">
+                    <div style="display: flex; align-items: center; gap: 10px;">
+                        <h3>Character Vault</h3>
+                        <span id="campaign-system-badge" class="kokonut-card" style="font-size: 11px; padding: 4px 10px; border-radius: 20px; border: 1px solid var(--border-color); color: var(--accent-main); font-weight: bold;">System: D&D 5e</span>
+                    </div>
+                    <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
                         <span id="sheet-save-status" style="color: var(--accent-main); font-size: 11px; font-weight: bold; opacity: 0; transition: opacity 0.3s;">✓ Auto-Saved</span>
-                        <select id="rpg-system-select" class="config-select" style="width: 200px;">
-                            <option value="dnd">D&D 5e</option>
-                            <option value="daggerheart">Daggerheart</option>
-                            <option value="aquelarre">Aquelarre</option>
-                            <option value="assimilacao">Assimilação RPG</option>
-                            <option value="vampire">Vampire: The Masquerade</option>
-                        </select>
+                        <div class="sheet-divider" style="width: 1px; height: 20px; background: var(--border-color);"></div>
+                        <select id="character-roster" class="config-select" style="width: 150px;"></select>
+                        <button id="new-char-btn" class="secondary-btn kokonut-btn" style="padding: 6px 12px; font-size: 12px;">+ New Character</button>
                     </div>
                 </div>
                 
-                <!-- JS NATIVE BLUEPRINTS INJECT HERE -->
-                <div id="dynamic-sheet-container" class="panel glass-panel" style="flex-grow: 1; display: flex; flex-direction: column; overflow-y: auto; padding: 20px;">
+                <div style="display: flex; gap: 15px; flex-grow: 1; overflow: hidden; margin-top: 5px;">
+                    <!-- Character Portrait Sidebar -->
+                    <div class="panel glass-panel" style="width: 160px; display: flex; flex-direction: column; align-items: center; padding: 20px; flex-shrink: 0;">
+                        <h4 style="margin: 0 0 15px 0; font-size: 12px; color: var(--text-muted); text-transform: uppercase;">Portrait</h4>
+                        <img id="char-portrait-img" src="https://via.placeholder.com/120" style="width: 120px; height: 120px; border-radius: 50%; object-fit: cover; border: 2px solid var(--accent-main); cursor: pointer; transition: transform 0.2s;" title="Click to upload portrait">
+                        <button id="spawn-char-token-btn" class="primary-btn kokonut-btn glow-btn" style="margin-top: 20px; width: 100%; font-size: 11px; padding: 8px;">Spawn Token</button>
+                    </div>
+                    <!-- The Sheet Itself -->
+                    <div id="dynamic-sheet-container" class="panel glass-panel kokonut-scroll" style="flex-grow: 1; display: flex; flex-direction: column; overflow-y: auto; padding: 20px;"></div>
                 </div>
             </div>
+
+            <!-- TAB 4: DM SCREEN -->
+            <div id="dm-view" class="content-wrapper" style="display: none; height: 100%; flex-direction: column; overflow: hidden;">
+                <div class="panel glass-panel" style="display: flex; flex-direction: column; height: 100%; padding: 20px;">
+                    <h3 style="color: #fbbf24; margin-top: 0;">👑 DM Command Center</h3>
+                    <div style="display: flex; gap: 20px; flex-grow: 1; margin-top: 15px; overflow: hidden;">
+                        
+                        <!-- Left: Party Viewer -->
+                        <div style="flex: 1; border-right: 1px solid var(--border-color); padding-right: 20px; display: flex; flex-direction: column;">
+                            <h4 style="color: var(--text-muted); margin-top: 0;">Live Party Sheets</h4>
+                            <div id="party-list-grid" class="kokonut-scroll button-grid" style="overflow-y: auto; flex-grow: 1; display: flex; flex-direction: column; gap: 10px;">
+                                <p style="color:var(--text-muted); font-size: 13px;">No active sheets broadcast yet.</p>
+                            </div>
+                        </div>
+
+                        <!-- Right: NPC Manager -->
+                        <div style="flex: 1; padding-left: 20px; display: flex; flex-direction: column;">
+                            <div style="display: flex; justify-content: space-between; align-items: center;">
+                                <h4 style="color: var(--text-muted); margin-top: 0;">NPC Stat Blocks</h4>
+                                <button id="add-npc-btn" class="secondary-btn kokonut-btn" style="padding: 4px 8px; font-size: 11px;">+ New NPC</button>
+                            </div>
+                            <div id="npc-list-grid" class="kokonut-scroll" style="overflow-y: auto; flex-grow: 1; margin-top: 15px; display: flex; flex-direction: column; gap: 10px;">
+                            </div>
+                        </div>
+
+                    </div>
+                </div>
+            </div>
+
             <!-- SETTINGS MODAL VIEW -->
-            <div id="config-view" class="panel glass-panel" style="display: none; max-width: 600px; margin: 20px auto; width: 100%;">
-                <h2 style="margin-top: 0; display: flex; align-items: center; gap: 10px; color: var(--text-main);">
-                    <img src="./conflict-logo.png" alt="Logo" class="brand-icon-img" style="width: 32px; height: 32px;"> 
-                    Conflict Settings
-                </h2>
-                
-                <div class="config-group">
-                    <label class="config-label">Display Name:</label>
-                    <input type="text" id="username-input" class="config-input" placeholder="Enter your name...">
-                    
-                    <label class="config-label" style="margin-top: 15px; display: block;">Profile Picture:</label>
-                    <div class="avatar-upload-row" style="display: flex; align-items: center; gap: 15px; margin-top: 10px;">
-                        <img src="https://via.placeholder.com/80" id="config-avatar-preview" class="avatar-large" alt="Preview">
-                        <input type="file" id="avatar-upload" accept="image/png, image/jpeg, image/gif" style="display: none;">
-                        <button id="change-avatar-btn" class="secondary-btn">Upload Image / GIF</button>
+            <div id="config-view" class="panel glass-panel floating-panel" style="display: none; position: absolute; z-index: 100; top: 10%; left: 50%; width: 500px;">
+                <div class="drag-handle">
+                    <h3 style="margin: 0; display: flex; align-items: center; gap: 10px;"><img src="./conflict-logo.png" class="brand-icon-img" style="width: 24px; height: 24px;"> Settings</h3>
+                    <span class="grip">≡</span>
+                </div>
+                <div class="panel-content">
+                    <div class="config-group">
+                        <label class="config-label">Display Name:</label>
+                        <input type="text" id="username-input" class="config-input kokonut-input" placeholder="Enter your name..." style="width: 100%; margin-top: 5px;">
+                        
+                        <label class="config-label" style="margin-top: 15px; display: block;">Profile Picture:</label>
+                        <div class="avatar-upload-row" style="display: flex; align-items: center; gap: 15px; margin-top: 10px;">
+                            <img src="https://via.placeholder.com/80" id="config-avatar-preview" class="avatar-large" alt="Preview">
+                            <button id="change-avatar-btn" class="secondary-btn kokonut-btn">Upload Image</button>
+                        </div>
                     </div>
-                </div>
-
-                <div class="config-group" style="margin-top: 25px; border-top: 1px solid var(--border-color); padding-top: 20px;">
-                    <h3>Hardware Settings</h3>
-                    <label class="config-label" style="font-size: 13px; color: var(--text-muted);">Microphone:</label>
-                    <select id="audio-in-select" class="config-select"></select>
-                    
-                    <label class="config-label" style="margin-top: 15px; display: block; font-size: 13px; color: var(--text-muted);">Speaker / Output Device:</label>
-                    <select id="audio-out-select" class="config-select"></select>
-
-                    <label class="config-label" style="margin-top: 15px; display: block; font-size: 13px; color: var(--text-muted);">Webcam / Capture Card:</label>
-                    <select id="video-in-select" class="config-select"></select>
-                    
-                    <button id="refresh-devices-btn" class="outline-btn" style="margin-top: 15px; width: 100%;">🔄 Refresh Devices</button>
-                </div>
-
-                <div class="config-group" style="margin-top: 25px; border-top: 1px solid var(--border-color); padding-top: 20px;">
-                    <h3>Theme Colors</h3>
-                    <div class="color-pickers" style="display: flex; gap: 15px; flex-wrap: wrap;">
-                        <label>Background <input type="color" id="color-bg"></label>
-                        <label>Panel <input type="color" id="color-panel"></label>
-                        <label>Text <input type="color" id="color-text"></label>
-                        <label>Accent <input type="color" id="color-accent"></label>
+                    <div class="config-group" style="margin-top: 25px; border-top: 1px solid var(--border-color); padding-top: 20px;">
+                        <h3>Hardware Settings</h3>
+                        <label class="config-label" style="font-size: 13px; color: var(--text-muted);">Microphone:</label>
+                        <select id="audio-in-select" class="config-select kokonut-select" style="width: 100%; margin-top: 5px;"></select>
+                        <label class="config-label" style="margin-top: 15px; display: block; font-size: 13px; color: var(--text-muted);">Output Device:</label>
+                        <select id="audio-out-select" class="config-select kokonut-select" style="width: 100%; margin-top: 5px;"></select>
+                        <label class="config-label" style="margin-top: 15px; display: block; font-size: 13px; color: var(--text-muted);">Webcam:</label>
+                        <select id="video-in-select" class="config-select kokonut-select" style="width: 100%; margin-top: 5px;"></select>
+                        <button id="refresh-devices-btn" class="outline-btn kokonut-btn" style="margin-top: 15px; width: 100%;">🔄 Refresh Devices</button>
                     </div>
-                    <button id="reset-theme-btn" class="outline-btn" style="margin-top: 15px;">Reset to Default Theme</button>
-                </div>
-
-                <div class="config-group" style="margin-top: 20px;">
-                    <button id="save-theme-btn" class="primary-btn" style="width: 100%; font-size: 16px; padding: 12px;">Save & Return</button>
+                    <div class="config-group" style="margin-top: 25px; border-top: 1px solid var(--border-color); padding-top: 20px;">
+                        <h3>Theme Colors</h3>
+                        <div class="color-pickers" style="display: flex; gap: 15px; flex-wrap: wrap;">
+                            <label>Background <input type="color" id="color-bg"></label><label>Panel <input type="color" id="color-panel"></label>
+                            <label>Text <input type="color" id="color-text"></label><label>Accent <input type="color" id="color-accent"></label>
+                        </div>
+                        <button id="reset-theme-btn" class="outline-btn kokonut-btn" style="margin-top: 15px;">Reset Default</button>
+                    </div>
+                    <div class="config-group" style="margin-top: 20px;">
+                        <button id="save-theme-btn" class="primary-btn kokonut-btn glow-btn" style="width: 100%; font-size: 16px; padding: 12px;">Save & Return</button>
+                    </div>
                 </div>
             </div>
         </main>
     </div>
 
-<!-- SCREEN SHARE PICKER MODAL -->
+    <!-- UTILITIES & MODALS -->
+    <input type="file" id="avatar-upload" accept="image/png, image/jpeg, image/gif" style="display: none;">
     <div id="modal-overlay" style="display: none; position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(0,0,0,0.7); z-index: 99; backdrop-filter: blur(4px);"></div>
     <div id="screen-picker-modal" class="panel glass-panel" style="display: none; position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); z-index: 100; max-width: 850px; width: 90%; max-height: 80vh; flex-direction: column;">
         <h3 style="margin-top: 0; margin-bottom: 20px;">Select what to share</h3>
         <div id="screen-picker-grid" style="display: flex; flex-wrap: wrap; gap: 15px; overflow-y: auto; max-height: 60vh; padding-right: 10px;"></div>
-        <button id="cancel-screen-picker" class="outline-btn" style="margin-top: 20px; width: 100%;">Cancel</button>
+        <button id="cancel-screen-picker" class="outline-btn kokonut-btn" style="margin-top: 20px; width: 100%;">Cancel</button>
     </div>
 
+    <!-- PROFILE PICTURE CROPPER MODAL -->
+    <div id="crop-modal-overlay" style="display: none; position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(0,0,0,0.8); z-index: 200; backdrop-filter: blur(6px);"></div>
+    <div id="crop-modal" class="panel glass-panel" style="display: none; position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); z-index: 201; width: 360px; flex-direction: column; align-items: center; padding: 25px;">
+        <h3 style="margin-top: 0; margin-bottom: 15px;">Position Image</h3>
+        <div id="crop-viewport" style="position: relative; width: 200px; height: 200px; border-radius: 50%; overflow: hidden; border: 3px solid var(--accent-main); cursor: grab; background: #000; box-shadow: 0 0 20px rgba(0,0,0,0.8);">
+            <img id="crop-image-target" src="" style="position: absolute; cursor: grab; user-select: none; max-width: none;" draggable="false">
+        </div>
+        <!-- Scripts -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/animejs/3.2.1/anime.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
-    <script src="app.js"></script>
+    <script src="js/core.js"></script>
+    <script src="js/vtt.js"></script>
+    <script src="js/rpg.js"></script>
+</body>
+</html>
+        <div style="display: flex; gap: 10px; width: 100%;">
+            <button id="cancel-crop-btn" class="outline-btn kokonut-btn" style="flex: 1;">Cancel</button>
+            <button id="save-crop-btn" class="primary-btn kokonut-btn glow-btn" style="flex: 1;">Apply Crop</button>
+        </div>
+    </div>
+
+<!-- Scripts -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/animejs/3.2.1/anime.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
+    <script src="js/core.js"></script>
+    <script src="js/vtt.js"></script>
+    <script src="js/rpg.js"></script>
 </body>
 </html>

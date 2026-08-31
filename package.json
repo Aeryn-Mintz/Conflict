@@ -1,13 +1,15 @@
 {
   "name": "conflict",
-  "version": "1.5.5",
+  "version": "1.5.9",
   "description": "Secure P2P Comms & Media",
+  "author": "YourName",
   "main": "main.js",
   "scripts": {
     "start": "electron .",
     "build": "electron-builder --win"
   },
   "dependencies": {
+    "electron-updater": "^6.8.9",
     "localtunnel": "^2.0.2",
     "ws": "^8.16.0"
   },
@@ -18,9 +20,18 @@
   "build": {
     "appId": "com.conflict.app",
     "productName": "Conflict",
+    "buildDependenciesFromSource": true,
+    "npmRebuild": false,
     "directories": {
       "output": "dist"
     },
+    "publish": [
+      {
+        "provider": "github",
+        "owner": "Aeryn-Mintz",
+        "repo": "Conflict"
+      }
+    ],
     "win": {
       "target": "nsis",
       "icon": "conflict-logo.png"
