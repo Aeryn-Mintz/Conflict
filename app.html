@@ -7,6 +7,13 @@
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
+    <div id="update-overlay" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(5, 10, 6, 0.9); z-index: 9999; justify-content: center; align-items: center; flex-direction: column; backdrop-filter: blur(5px);">
+    <div class="update-spinner"></div>
+    <span id="update-msg" style="color: var(--accent-main); margin-top: 15px; font-weight: bold;">Procurando atualizações...</span>
+    <div style="width: 300px; height: 8px; background: rgba(255,255,255,0.1); margin-top: 15px; border-radius: 4px; overflow: hidden;">
+        <div id="update-progress-bar" style="width: 0%; height: 100%; background: var(--accent-main); transition: width 0.2s ease;"></div>
+    </div>
+</div>
     <div class="conflict-app">
         <!-- SIDEBAR -->
         <aside class="sidebar z-high">
@@ -35,8 +42,7 @@
             <div class="tab-container z-high">
                 <button class="tab-btn active kokonut-tab" data-tab="main">Main Stage</button>
                 <button class="tab-btn kokonut-tab" data-tab="rpg">RPG Tabletop</button>
-                <button class="tab-btn kokonut-tab" data-tab="sheets">Character Vault</button>
-                <!-- DM ONLY TAB -->
+                <button id="tab-vault-btn" class="tab-btn" data-tab="sheets">Character Vault</button>                <!-- DM ONLY TAB -->
                 <button id="tab-dm-btn" class="tab-btn kokonut-tab" data-tab="dm" style="display: none; color: #fbbf24; border-color: #fbbf24;">👑 DM Screen</button>
             </div>
 
@@ -154,8 +160,8 @@
             <div id="sheets-view" class="content-wrapper" style="display: none; height: 100%; flex-direction: column; overflow: hidden;">
                 <div class="panel glass-panel" style="display: flex; justify-content: space-between; align-items: center; padding: 15px 20px; flex-shrink: 0; flex-wrap: wrap; gap: 10px;">
                     <div style="display: flex; align-items: center; gap: 10px;">
-                        <h3>Character Vault</h3>
-                        <span id="campaign-system-badge" class="kokonut-card" style="font-size: 11px; padding: 4px 10px; border-radius: 20px; border: 1px solid var(--border-color); color: var(--accent-main); font-weight: bold;">System: D&D 5e</span>
+                    <h2 id="char-vault-title">Character Vault</h2>      
+                  <span id="campaign-system-badge" class="kokonut-card" style="font-size: 11px; padding: 4px 10px; border-radius: 20px; border: 1px solid var(--border-color); color: var(--accent-main); font-weight: bold;">System: D&D 5e</span>
                     </div>
                     <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
                         <span id="sheet-save-status" style="color: var(--accent-main); font-size: 11px; font-weight: bold; opacity: 0; transition: opacity 0.3s;">✓ Auto-Saved</span>
@@ -205,48 +211,75 @@
                 </div>
             </div>
 
-            <!-- SETTINGS MODAL VIEW -->
-            <div id="config-view" class="panel glass-panel floating-panel" style="display: none; position: absolute; z-index: 100; top: 10%; left: 50%; width: 500px;">
+            <!-- SETTINGS MODAL VIEW (Compact & Wide) -->
+            <div id="config-view" class="panel glass-panel floating-panel" style="display: none; position: absolute; z-index: 100; top: 10%; left: 50%; width: 750px; max-height: 85vh;">
                 <div class="drag-handle">
                     <h3 style="margin: 0; display: flex; align-items: center; gap: 10px;"><img src="./conflict-logo.png" class="brand-icon-img" style="width: 24px; height: 24px;"> Settings</h3>
                     <span class="grip">≡</span>
                 </div>
-                <div class="panel-content">
-                    <div class="config-group">
-                        <label class="config-label">Display Name:</label>
-                        <input type="text" id="username-input" class="config-input kokonut-input" placeholder="Enter your name..." style="width: 100%; margin-top: 5px;">
-                        
-                        <label class="config-label" style="margin-top: 15px; display: block;">Profile Picture:</label>
-                        <div class="avatar-upload-row" style="display: flex; align-items: center; gap: 15px; margin-top: 10px;">
-                            <img src="https://via.placeholder.com/80" id="config-avatar-preview" class="avatar-large" alt="Preview">
-                            <button id="change-avatar-btn" class="secondary-btn kokonut-btn">Upload Image</button>
+                <div class="panel-content" style="display: flex; flex-direction: column; gap: 15px;">
+                    
+                    <div style="display: flex; gap: 25px;">
+                        <!-- LEFT COLUMN: Profile & Themes -->
+                        <div style="flex: 1; display: flex; flex-direction: column; gap: 15px;">
+                            <div class="config-group">
+                                <label class="config-label" style="font-size: 13px; color: var(--text-muted);">Display Name:</label>
+                                <input type="text" id="username-input" class="config-input kokonut-input" placeholder="Enter your name..." style="width: 100%; margin-top: 5px;">
+                                
+                                <div class="avatar-upload-row" style="display: flex; align-items: center; gap: 15px; margin-top: 15px;">
+                                    <img src="https://via.placeholder.com/80" id="config-avatar-preview" class="avatar-large" alt="Preview" style="width: 60px; height: 60px;">
+                                    <button id="change-avatar-btn" class="secondary-btn kokonut-btn">Upload Image</button>
+                                </div>
+                            </div>
+                            
+                            <div class="config-group" style="border-top: 1px solid var(--border-color); padding-top: 15px;">
+                                <h3 style="margin-top: 0; margin-bottom: 10px; font-size: 15px;">Theme Colors</h3>
+                                <div class="color-pickers" style="display: flex; gap: 10px; flex-wrap: wrap;">
+                                    <label>Background <input type="color" id="color-bg"></label>
+                                    <label>Panel <input type="color" id="color-panel"></label>
+                                    <label>Text <input type="color" id="color-text"></label>
+                                    <label>Accent <input type="color" id="color-accent"></label>
+                                </div>
+                                <button id="reset-theme-btn" class="outline-btn kokonut-btn" style="margin-top: 10px; width: 100%; padding: 6px;">Reset Default</button>
+                            </div>
+                        </div>
+
+                        <!-- RIGHT COLUMN: Hardware Devices -->
+                        <div style="flex: 1; display: flex; flex-direction: column; gap: 12px; border-left: 1px solid var(--border-color); padding-left: 25px;">
+                            <h3 style="margin-top: 0; margin-bottom: 5px; font-size: 15px;">Hardware Settings</h3>
+                            
+                            <div>
+                                <label class="config-label" style="font-size: 12px; color: var(--text-muted);">Microphone:</label>
+                                <select id="audio-in-select" class="config-select kokonut-select" style="width: 100%; margin-top: 3px;"></select>
+                            </div>
+                            
+                            <div>
+                                <label class="config-label" style="font-size: 12px; color: var(--text-muted);">Output Device:</label>
+                                <select id="audio-out-select" class="config-select kokonut-select" style="width: 100%; margin-top: 3px;"></select>
+                            </div>
+                            
+                            <div>
+                                <label class="config-label" style="font-size: 12px; color: var(--text-muted);">Webcam:</label>
+                                <select id="video-in-select" class="config-select kokonut-select" style="width: 100%; margin-top: 3px;"></select>
+                            </div>
+                            
+                            <button id="refresh-devices-btn" class="outline-btn kokonut-btn" style="margin-top: auto; width: 100%; padding: 6px;">🔄 Refresh Devices</button>
                         </div>
                     </div>
-                    <div class="config-group" style="margin-top: 25px; border-top: 1px solid var(--border-color); padding-top: 20px;">
-                        <h3>Hardware Settings</h3>
-                        <label class="config-label" style="font-size: 13px; color: var(--text-muted);">Microphone:</label>
-                        <select id="audio-in-select" class="config-select kokonut-select" style="width: 100%; margin-top: 5px;"></select>
-                        <label class="config-label" style="margin-top: 15px; display: block; font-size: 13px; color: var(--text-muted);">Output Device:</label>
-                        <select id="audio-out-select" class="config-select kokonut-select" style="width: 100%; margin-top: 5px;"></select>
-                        <label class="config-label" style="margin-top: 15px; display: block; font-size: 13px; color: var(--text-muted);">Webcam:</label>
-                        <select id="video-in-select" class="config-select kokonut-select" style="width: 100%; margin-top: 5px;"></select>
-                        <button id="refresh-devices-btn" class="outline-btn kokonut-btn" style="margin-top: 15px; width: 100%;">🔄 Refresh Devices</button>
-                    </div>
-                    <div class="config-group" style="margin-top: 25px; border-top: 1px solid var(--border-color); padding-top: 20px;">
-                        <h3>Theme Colors</h3>
-                        <div class="color-pickers" style="display: flex; gap: 15px; flex-wrap: wrap;">
-                            <label>Background <input type="color" id="color-bg"></label><label>Panel <input type="color" id="color-panel"></label>
-                            <label>Text <input type="color" id="color-text"></label><label>Accent <input type="color" id="color-accent"></label>
-                        </div>
-                        <button id="reset-theme-btn" class="outline-btn kokonut-btn" style="margin-top: 15px;">Reset Default</button>
-                    </div>
-                    <div class="config-group" style="margin-top: 20px;">
-                        <button id="save-theme-btn" class="primary-btn kokonut-btn glow-btn" style="width: 100%; font-size: 16px; padding: 12px;">Save & Return</button>
+                    <div class="setting-item" style="margin-bottom: 15px;">
+    <label id="lang-label" style="display:block; margin-bottom:5px; color:var(--text-muted); font-size:12px;">Language / Idioma</label>
+    <select id="language-select" style="width: 100%; padding: 8px; background: rgba(0,0,0,0.5); border: 1px solid var(--border-color); color: var(--text-main); border-radius: 4px; font-size: 14px;">
+        <option value="en">🇺🇸 English</option>
+        <option value="pt-br">🇧🇷 Português (Brasil)</option>
+    </select>
+</div>
+
+                    <!-- BOTTOM FULL-WIDTH: Save Button -->
+                    <div class="config-group" style="border-top: 1px solid var(--border-color); padding-top: 15px;">
+                        <button id="save-theme-btn" class="primary-btn kokonut-btn glow-btn" style="width: 100%; font-size: 15px; padding: 10px;">Save & Return</button>
                     </div>
                 </div>
             </div>
-        </main>
-    </div>
 
     <!-- UTILITIES & MODALS -->
     <input type="file" id="avatar-upload" accept="image/png, image/jpeg, image/gif" style="display: none;">
@@ -265,22 +298,16 @@
             <img id="crop-image-target" src="" style="position: absolute; cursor: grab; user-select: none; max-width: none;" draggable="false">
         </div>
         <!-- Scripts -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/animejs/3.2.1/anime.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
-    <script src="js/core.js"></script>
-    <script src="js/vtt.js"></script>
-    <script src="js/rpg.js"></script>
-</body>
-</html>
-        <div style="display: flex; gap: 10px; width: 100%;">
+<div style="display: flex; gap: 10px; width: 100%;">
             <button id="cancel-crop-btn" class="outline-btn kokonut-btn" style="flex: 1;">Cancel</button>
             <button id="save-crop-btn" class="primary-btn kokonut-btn glow-btn" style="flex: 1;">Apply Crop</button>
         </div>
     </div>
 
-<!-- Scripts -->
+    <!-- Scripts -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/animejs/3.2.1/anime.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
+    <script src="js/lang.js"></script>
     <script src="js/core.js"></script>
     <script src="js/vtt.js"></script>
     <script src="js/rpg.js"></script>
