@@ -10,8 +10,7 @@ try {
     }
 } catch (e) {}
 
-window.defaultAvatar = 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="50" height="50"><rect width="50" height="50" fill="%231a1a1a"/><text x="50%" y="50%" fill="%2310b981" font-family="sans-serif" font-size="12" dy=".3em" text-anchor="middle">User</text></svg>';
-
+window.defaultAvatar = "data:image/svg+xml;charset=UTF-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='50' height='50'%3E%3Crect width='50' height='50' fill='%231a1a1a'/%3E%3Ctext x='50%25' y='50%25' fill='%2310b981' font-family='sans-serif' font-size='12' dy='.3em' text-anchor='middle'%3EUser%3C/text%3E%3C/svg%3E";
 window.myId = Math.random().toString(36).substring(2, 10); 
 window.socket = null; window.isDM = false; window.partySheets = {};
 window.activeCharId = null; window.viewingParty = false; window.viewingRemoteUid = null;
@@ -27,7 +26,7 @@ window.hasCheckedForUpdates = false;
 
 async function performActionWithUpdateCheck(actionCallback) {
     if (window.ipcRenderer && !window.hasCheckedForUpdates) {
-        window.hasCheckedForUpdates = true; // Só checa uma vez por sessão para não travar o usuário
+        window.hasCheckedForUpdates = true; 
         const overlay = document.getElementById('update-overlay'); const msg = document.getElementById('update-msg');
         if(overlay) overlay.style.display = 'flex';
         if(msg) msg.innerText = window.conflictTranslations[localStorage.getItem('conflictLang') || 'en']?.updateCheck || 'Checking for updates...';
@@ -214,8 +213,8 @@ function connectSocket() {
             else if (data.action === 'chat_message') window.addChatLine(data.username || 'Guest', data.text || '');
             else if (data.action === 'dice_roll' && data.userId !== window.myId && window.animateDiceRoll2D) {
                 const sides = parseInt(data.type.replace(/^\d+d/, '')) || 20;
-                window.animateDiceRoll2D(data.results, data.type.replace(/\d+/, ''), data.customClasses); 
-                if (data.results.includes(sides)) window.triggerFireworks();
+                window.animateDiceRoll2D(data.results, data.type, data.customClasses); 
+                if (data.results.includes(sides) && window.triggerFireworks) window.triggerFireworks();
             }
             else if (data.action === 'token_add' && data.userId !== window.myId && window.placeTokenOnMap) window.placeTokenOnMap(data.token, false);
             else if (data.action === 'token_move' && data.userId !== window.myId) { const el = document.getElementById('map-token-' + data.tokenId); if (el) { el.style.left = data.x + 'px'; el.style.top = data.y + 'px'; } }

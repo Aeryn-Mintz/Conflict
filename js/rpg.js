@@ -4,7 +4,6 @@
 window.saveTimeout = null;
 window.npcRoster = JSON.parse(localStorage.getItem('conflict_npcs') || '[]');
 
-
 window.sheetBlueprints = {
     dnd: `<div class="sheet-row"><input type="text" class="sheet-input dyn-save" data-key="name" placeholder="Character Name" style="font-size: 22px; font-weight: bold; flex: 2; color: var(--accent-main);"><input type="text" class="sheet-input dyn-save" data-key="class" placeholder="Class & Level" style="flex: 1;"><input type="text" class="sheet-input dyn-save" data-key="race" placeholder="Race & Background" style="flex: 1;"></div><div class="sheet-row" style="margin-top: 15px;"><div class="sheet-col" style="flex: 2;"><div class="sheet-row" style="gap: 10px; margin-bottom: 15px;"><div class="sheet-stat-box" style="flex: 1;"><label>Armor Class</label><input type="text" class="dyn-save" data-key="ac"></div><div class="sheet-stat-box" style="flex: 1;"><label class="rollable" data-dice="1d20" data-name="Initiative" data-mod-target="init">Initiative</label><input type="text" class="dyn-save" data-key="init"></div><div class="sheet-stat-box" style="flex: 1;"><label>Speed</label><input type="text" class="dyn-save" data-key="speed"></div><div class="sheet-stat-box" style="flex: 1;"><label>Prof Bonus</label><input type="text" class="dyn-save" data-key="prof" id="dnd-prof" value="2"></div></div><div class="sheet-row" style="gap: 10px; margin-bottom: 15px;"><div class="sheet-stat-box" style="flex: 2;"><label>Current Hit Points</label><input type="text" class="dyn-save" data-key="hp" placeholder="Max / Current" style="font-size: 22px;"></div><div class="sheet-stat-box" style="flex: 1;"><label>Temp HP</label><input type="text" class="dyn-save" data-key="temp_hp"></div><div class="sheet-stat-box" style="flex: 1;"><label>Hit Dice</label><input type="text" class="dyn-save" data-key="hit_dice"></div></div><div class="sheet-box"><h4>Attacks & Spellcasting</h4><textarea class="sheet-textarea dyn-save" data-key="attacks" style="min-height: 120px;" placeholder="Weapon | Atk Bonus | Damage/Type"></textarea></div><div class="sheet-box" style="margin-top: 15px;"><h4>Equipment & Gold</h4><textarea class="sheet-textarea dyn-save" data-key="inventory" style="min-height: 100px;"></textarea></div></div><div class="sheet-col" style="flex: 3;"><div class="sheet-box"><h4>Attributes & Saves</h4><div style="display: flex; gap: 10px; justify-content: space-between; margin-bottom: 15px;"><div class="attr-box"><label class="rollable" data-dice="1d20" data-name="STR Check" data-mod-target="str" data-is-attr="true">STR</label><input type="text" class="dyn-save dnd-attr" data-key="str" id="dnd-str" value="10"></div><div class="attr-box"><label class="rollable" data-dice="1d20" data-name="DEX Check" data-mod-target="dex" data-is-attr="true">DEX</label><input type="text" class="dyn-save dnd-attr" data-key="dex" id="dnd-dex" value="10"></div><div class="attr-box"><label class="rollable" data-dice="1d20" data-name="CON Check" data-mod-target="con" data-is-attr="true">CON</label><input type="text" class="dyn-save dnd-attr" data-key="con" id="dnd-con" value="10"></div><div class="attr-box"><label class="rollable" data-dice="1d20" data-name="INT Check" data-mod-target="int" data-is-attr="true">INT</label><input type="text" class="dyn-save dnd-attr" data-key="int" id="dnd-int" value="10"></div><div class="attr-box"><label class="rollable" data-dice="1d20" data-name="WIS Check" data-mod-target="wis" data-is-attr="true">WIS</label><input type="text" class="dyn-save dnd-attr" data-key="wis" id="dnd-wis" value="10"></div><div class="attr-box"><label class="rollable" data-dice="1d20" data-name="CHA Check" data-mod-target="cha" data-is-attr="true">CHA</label><input type="text" class="dyn-save dnd-attr" data-key="cha" id="dnd-cha" value="10"></div></div><h4>Skills</h4><div class="skills-grid"><div class="skill-item"><span><input type="checkbox" class="prof-toggle dyn-save" data-key="prof_acro" data-attr="dex"> <span class="rollable" data-dice="1d20" data-name="Acrobatics" data-mod-target="sk_acro">Acrobatics</span></span><input type="text" class="dyn-save dnd-skill" data-key="sk_acro" readonly></div><div class="skill-item"><span><input type="checkbox" class="prof-toggle dyn-save" data-key="prof_anim" data-attr="wis"> <span class="rollable" data-dice="1d20" data-name="Animal Handling" data-mod-target="sk_anim">Animal Hand</span></span><input type="text" class="dyn-save dnd-skill" data-key="sk_anim" readonly></div><div class="skill-item"><span><input type="checkbox" class="prof-toggle dyn-save" data-key="prof_arca" data-attr="int"> <span class="rollable" data-dice="1d20" data-name="Arcana" data-mod-target="sk_arca">Arcana</span></span><input type="text" class="dyn-save dnd-skill" data-key="sk_arca" readonly></div><div class="skill-item"><span><input type="checkbox" class="prof-toggle dyn-save" data-key="prof_athl" data-attr="str"> <span class="rollable" data-dice="1d20" data-name="Athletics" data-mod-target="sk_athl">Athletics</span></span><input type="text" class="dyn-save dnd-skill" data-key="sk_athl" readonly></div><div class="skill-item"><span><input type="checkbox" class="prof-toggle dyn-save" data-key="prof_dece" data-attr="cha"> <span class="rollable" data-dice="1d20" data-name="Deception" data-mod-target="sk_dece">Deception</span></span><input type="text" class="dyn-save dnd-skill" data-key="sk_dece" readonly></div><div class="skill-item"><span><input type="checkbox" class="prof-toggle dyn-save" data-key="prof_hist" data-attr="int"> <span class="rollable" data-dice="1d20" data-name="History" data-mod-target="sk_hist">History</span></span><input type="text" class="dyn-save dnd-skill" data-key="sk_hist" readonly></div><div class="skill-item"><span><input type="checkbox" class="prof-toggle dyn-save" data-key="prof_ins" data-attr="wis"> <span class="rollable" data-dice="1d20" data-name="Insight" data-mod-target="sk_ins">Insight</span></span><input type="text" class="dyn-save dnd-skill" data-key="sk_ins" readonly></div><div class="skill-item"><span><input type="checkbox" class="prof-toggle dyn-save" data-key="prof_inti" data-attr="cha"> <span class="rollable" data-dice="1d20" data-name="Intimidation" data-mod-target="sk_inti">Intimidation</span></span><input type="text" class="dyn-save dnd-skill" data-key="sk_inti" readonly></div><div class="skill-item"><span><input type="checkbox" class="prof-toggle dyn-save" data-key="prof_inv" data-attr="int"> <span class="rollable" data-dice="1d20" data-name="Investigation" data-mod-target="sk_inv">Investigation</span></span><input type="text" class="dyn-save dnd-skill" data-key="sk_inv" readonly></div><div class="skill-item"><span><input type="checkbox" class="prof-toggle dyn-save" data-key="prof_med" data-attr="wis"> <span class="rollable" data-dice="1d20" data-name="Medicine" data-mod-target="sk_med">Medicine</span></span><input type="text" class="dyn-save dnd-skill" data-key="sk_med" readonly></div><div class="skill-item"><span><input type="checkbox" class="prof-toggle dyn-save" data-key="prof_nat" data-attr="int"> <span class="rollable" data-dice="1d20" data-name="Nature" data-mod-target="sk_nat">Nature</span></span><input type="text" class="dyn-save dnd-skill" data-key="sk_nat" readonly></div><div class="skill-item"><span><input type="checkbox" class="prof-toggle dyn-save" data-key="prof_perc" data-attr="wis"> <span class="rollable" data-dice="1d20" data-name="Perception" data-mod-target="sk_perc">Perception</span></span><input type="text" class="dyn-save dnd-skill" data-key="sk_perc" readonly></div><div class="skill-item"><span><input type="checkbox" class="prof-toggle dyn-save" data-key="prof_perf" data-attr="cha"> <span class="rollable" data-dice="1d20" data-name="Performance" data-mod-target="sk_perf">Performance</span></span><input type="text" class="dyn-save dnd-skill" data-key="sk_perf" readonly></div><div class="skill-item"><span><input type="checkbox" class="prof-toggle dyn-save" data-key="prof_pers" data-attr="cha"> <span class="rollable" data-dice="1d20" data-name="Persuasion" data-mod-target="sk_pers">Persuasion</span></span><input type="text" class="dyn-save dnd-skill" data-key="sk_pers" readonly></div><div class="skill-item"><span><input type="checkbox" class="prof-toggle dyn-save" data-key="prof_rel" data-attr="int"> <span class="rollable" data-dice="1d20" data-name="Religion" data-mod-target="sk_rel">Religion</span></span><input type="text" class="dyn-save dnd-skill" data-key="sk_rel" readonly></div><div class="skill-item"><span><input type="checkbox" class="prof-toggle dyn-save" data-key="prof_slei" data-attr="dex"> <span class="rollable" data-dice="1d20" data-name="Sleight of Hand" data-mod-target="sk_slei">Sleight Hand</span></span><input type="text" class="dyn-save dnd-skill" data-key="sk_slei" readonly></div><div class="skill-item"><span><input type="checkbox" class="prof-toggle dyn-save" data-key="prof_ste" data-attr="dex"> <span class="rollable" data-dice="1d20" data-name="Stealth" data-mod-target="sk_ste">Stealth</span></span><input type="text" class="dyn-save dnd-skill" data-key="sk_ste" readonly></div><div class="skill-item"><span><input type="checkbox" class="prof-toggle dyn-save" data-key="prof_surv" data-attr="wis"> <span class="rollable" data-dice="1d20" data-name="Survival" data-mod-target="sk_surv">Survival</span></span><input type="text" class="dyn-save dnd-skill" data-key="sk_surv" readonly></div></div></div><div class="sheet-box" style="margin-top: 15px;"><h4>Features, Traits & Proficiencies</h4><textarea class="sheet-textarea dyn-save" data-key="features" style="min-height: 150px;"></textarea></div></div></div>`,
     daggerheart: `<div class="sheet-row"><input type="text" class="sheet-input dyn-save" data-key="name" placeholder="Character Name" style="font-size: 20px; font-weight: bold; flex: 2; color: var(--accent-main);"><input type="text" class="sheet-input dyn-save" data-key="class" placeholder="Class & Subclass" style="flex: 2;"><input type="text" class="sheet-input dyn-save" data-key="level" placeholder="Level" style="flex: 1;"></div><div class="sheet-row" style="margin: 15px 0; gap: 10px;"><div class="sheet-stat-box" style="flex: 1;"><label>HOPE</label><input type="text" class="dyn-save" data-key="hope"></div><div class="sheet-stat-box" style="flex: 1; border-color: #ef4444;"><label>FEAR</label><input type="text" class="dyn-save" data-key="fear" style="color: #ef4444;"></div><div class="sheet-stat-box" style="flex: 1;"><label>HP</label><input type="text" class="dyn-save" data-key="hp"></div><div class="sheet-stat-box" style="flex: 1;"><label>STRESS</label><input type="text" class="dyn-save" data-key="stress"></div><div class="sheet-stat-box" style="flex: 1.5;"><label class="rollable" data-dice="1d20" data-name="Evasion" data-mod-target="evasion">EVASION</label><div style="display:flex; gap:5px; align-items:center;"><input type="text" class="dyn-save dh-base-evasion" data-key="base_evasion" placeholder="Base" style="font-size: 12px; border-right: 1px solid var(--border-color); padding-right: 5px;" title="Base Class Evasion"><input type="text" class="dyn-save dh-evasion" data-key="evasion" title="Total Evasion"></div></div><div class="sheet-stat-box" style="flex: 1;"><label>ARMOR</label><input type="text" class="dyn-save" data-key="armor"></div></div><div class="sheet-row"><div class="sheet-col" style="flex: 1;"><div class="sheet-box"><h4>Traits & Attributes</h4><div class="skills-grid" style="grid-template-columns: 1fr;"><div class="skill-item"><span class="rollable" data-dice="2d12" data-name="Agility Roll" data-mod-target="agility">Agility</span><input type="text" class="dyn-save dh-agi" data-key="agility"></div><div class="skill-item"><span class="rollable" data-dice="2d12" data-name="Strength Roll" data-mod-target="strength">Strength</span><input type="text" class="dyn-save" data-key="strength"></div><div class="skill-item"><span class="rollable" data-dice="2d12" data-name="Finesse Roll" data-mod-target="finesse">Finesse</span><input type="text" class="dyn-save" data-key="finesse"></div><div class="skill-item"><span class="rollable" data-dice="2d12" data-name="Instinct Roll" data-mod-target="instinct">Instinct</span><input type="text" class="dyn-save" data-key="instinct"></div><div class="skill-item"><span class="rollable" data-dice="2d12" data-name="Presence Roll" data-mod-target="presence">Presence</span><input type="text" class="dyn-save" data-key="presence"></div><div class="skill-item"><span class="rollable" data-dice="2d12" data-name="Knowledge Roll" data-mod-target="knowledge">Knowledge</span><input type="text" class="dyn-save" data-key="knowledge"></div></div></div><div class="sheet-box" style="margin-top: 15px;"><h4>Experiences</h4><textarea class="sheet-textarea dyn-save" data-key="experiences" style="min-height: 100px;"></textarea></div></div><div class="sheet-col" style="flex: 2;"><div class="sheet-box" style="margin-bottom: 15px;"><h4>Damage Thresholds</h4><div style="display: flex; gap: 10px;"><input type="text" class="sheet-input dyn-save" data-key="minor" placeholder="Minor"><input type="text" class="sheet-input dyn-save" data-key="major" placeholder="Major"><input type="text" class="sheet-input dyn-save" data-key="severe" placeholder="Severe"></div></div><div class="sheet-box" style="margin-bottom: 15px;"><h4>Active Weapons</h4><textarea class="sheet-textarea dyn-save" data-key="weapons" style="min-height: 100px;"></textarea></div><div class="sheet-box"><h4>Domain Cards & Abilities</h4><textarea class="sheet-textarea dyn-save" data-key="abilities" style="min-height: 150px;"></textarea></div></div></div>`,
@@ -122,68 +121,6 @@ function updateRosterDropdown(system) {
     }
 }
 
-document.addEventListener('change', (e) => { 
-    if (e.target.id === 'rpg-system-select') {
-        window.applyCampaignSystem(e.target.value, window.isDM);
-    }
-    if (e.target.id === 'character-roster') {
-        window.activeCharId = e.target.value; 
-        updateRosterDropdown(document.getElementById('rpg-system-select').value); 
-        renderCharacterSheet();
-    }
-});
-
-document.addEventListener('click', (e) => {
-    if (e.target.closest('#new-char-btn')) {
-        const system = document.getElementById('rpg-system-select').value;
-        const roster = getRoster(system);
-        window.activeCharId = Math.random().toString(36).substr(2, 9);
-        roster.push({ id: window.activeCharId, name: 'New Character', data: {}, portrait: null });
-        saveRoster(system, roster); 
-        updateRosterDropdown(system); 
-        renderCharacterSheet();
-    }
-    if (e.target.closest('#view-party-btn')) {
-        window.viewingParty = !window.viewingParty;
-        const btn = document.getElementById('view-party-btn');
-        const controls = [document.getElementById('rpg-system-select'), document.getElementById('character-roster'), document.getElementById('new-char-btn'), document.querySelector('.sheet-divider')];
-        
-        if (window.viewingParty) {
-            if(btn) btn.innerText = "👤 My Character"; 
-            controls.forEach(el => { if (el) el.style.display = 'none'; }); 
-            const portrait = document.getElementById('char-portrait-img'); if(portrait) portrait.style.display = 'none';
-            const spawnBtn = document.getElementById('spawn-char-token-btn'); if(spawnBtn) spawnBtn.style.display = 'none';
-            window.renderPartyList();
-        } else {
-            if(btn) btn.innerText = "👁️ Party Sheets"; 
-            controls.forEach(el => { if (el) el.style.display = 'block'; }); 
-            const portrait = document.getElementById('char-portrait-img'); if(portrait) portrait.style.display = 'block';
-            const spawnBtn = document.getElementById('spawn-char-token-btn'); if(spawnBtn) spawnBtn.style.display = 'block';
-            renderCharacterSheet(); 
-        }
-    }
-    if (e.target.closest('#tab-dm-btn')) {
-        if (window.renderPartyList) window.renderPartyList();
-        renderNpcs();
-    }
-    if (e.target.closest('#add-npc-btn')) {
-        window.npcRoster.push({ id: Math.random().toString(36).substr(2,9), name: 'New Goblin', hp: 7, ac: 15, portrait: null });
-        saveNpcs(); renderNpcs();
-    }
-    if (e.target.closest('#spawn-char-token-btn')) {
-        const sys = document.getElementById('rpg-system-select').value;
-        const roster = getRoster(sys);
-        const activeChar = roster.find(c => c.id === window.activeCharId);
-        
-        if (!activeChar || !activeChar.portrait) return alert("Please click your portrait above and upload an image first!");
-        
-        const asset = { id: window.myId + '-' + window.activeCharId, name: activeChar.name, src: activeChar.portrait, type: 'token', ownerId: window.myId };
-        if (window.placeTokenOnMap) window.placeTokenOnMap(asset, true);
-        
-        document.querySelector('[data-tab="rpg"]')?.click();
-    }
-});
-
 window.renderPartyList = function() {
     window.viewingRemoteUid = null;
     const container1 = document.getElementById('dynamic-sheet-container');
@@ -226,7 +163,19 @@ window.renderPartyList = function() {
             const btn2 = document.createElement('div');
             btn2.className = 'panel'; btn2.style.background = 'rgba(0,0,0,0.4)'; btn2.style.padding = '10px'; btn2.style.cursor = 'pointer';
             btn2.innerHTML = btnHtml;
-            btn2.onclick = () => { document.querySelector('[data-tab="sheets"]')?.click(); window.viewingParty = false; document.getElementById('view-party-btn')?.click(); renderRemoteSheet(uid); };
+            btn2.onclick = () => { 
+                document.querySelector('[data-tab="sheets"]')?.click(); 
+                if (!window.viewingParty) {
+                    window.viewingParty = true;
+                    const vpb = document.getElementById('view-party-btn');
+                    if(vpb) vpb.innerText = "👤 My Character"; 
+                    [document.getElementById('rpg-system-select'), document.getElementById('character-roster'), document.getElementById('new-char-btn'), document.querySelector('.sheet-divider')].forEach(el => { if (el) el.style.display = 'none'; }); 
+                    const portrait = document.getElementById('char-portrait-img'); if(portrait) portrait.style.display = 'none';
+                    const spawnBtn = document.getElementById('spawn-char-token-btn'); if(spawnBtn) spawnBtn.style.display = 'none';
+                    window.renderPartyList(); 
+                }
+                renderRemoteSheet(uid); 
+            };
             grid2.appendChild(btn2);
         }
     }
@@ -244,8 +193,7 @@ function renderRemoteSheet(uid) {
         const key = input.getAttribute('data-key');
         if (input.type === 'checkbox') input.checked = sheetInfo.data[key] === true;
         else if (sheetInfo.data[key]) input.value = sheetInfo.data[key];
-        input.disabled = true; input.style.pointerEvents = 'none';
-        if (input.tagName === 'TEXTAREA') input.style.opacity = '0.8';
+        input.style.pointerEvents = 'none'; input.readOnly = true; 
     });
 }
 
@@ -256,7 +204,6 @@ function renderCharacterSheet() {
     if (!container) return;
     
     container.innerHTML = sheetBlueprints[system] || `<p>System not found.</p>`;
-    
     const roster = getRoster(system);
     const activeChar = roster.find(c => c.id === window.activeCharId) || roster[0];
     const parsedData = activeChar ? (activeChar.data || {}) : {};
@@ -283,6 +230,8 @@ function renderCharacterSheet() {
     if (typeof calculateVampire === 'function' && system === 'vampire') calculateVampire();
     if (typeof calculateAssimilacao === 'function' && system === 'assimilacao') calculateAssimilacao();
     window.saveCharacterSheet(system);
+
+    if (window.updateTabletopRoller) window.updateTabletopRoller(system);
 }
 
 window.saveCharacterSheet = function(system) {
@@ -304,8 +253,7 @@ window.saveCharacterSheet = function(system) {
     let portraitUrl = null;
     
     if (charIndex > -1) {
-        roster[charIndex].data = data;
-        roster[charIndex].name = charName;
+        roster[charIndex].data = data; roster[charIndex].name = charName;
         portraitUrl = roster[charIndex].portrait || null;
         saveRoster(system, roster);
         const opt = document.querySelector(`#character-roster option[value="${window.activeCharId}"]`);
@@ -313,15 +261,7 @@ window.saveCharacterSheet = function(system) {
     }
     
     if (window.socket && window.socket.readyState === WebSocket.OPEN) {
-        window.socket.send(JSON.stringify({ 
-            action: 'sheet_update', 
-            userId: window.myId, 
-            username: document.getElementById('display-username').textContent, 
-            system: system, 
-            charName: charName, 
-            data: data,
-            portrait: portraitUrl
-        }));
+        window.socket.send(JSON.stringify({ action: 'sheet_update', userId: window.myId, username: document.getElementById('display-username').textContent, system: system, charName: charName, data: data, portrait: portraitUrl }));
     }
 
    const statusText = document.getElementById('sheet-save-status');
@@ -329,33 +269,40 @@ window.saveCharacterSheet = function(system) {
         statusText.style.opacity = 1; clearTimeout(window.saveTimeout);
         window.saveTimeout = setTimeout(() => { statusText.style.opacity = 0; }, 2000);
     }
-};
-
-window.getActiveCharMod = function(system, modKey) {
-    const roster = getRoster(system);
-    const activeChar = roster.find(c => c.id === window.activeCharId) || roster[0];
-    if (!activeChar || !activeChar.data) return { val: 0, name: document.getElementById('display-username').textContent };
     
-    const rawVal = activeChar.data[modKey] || "";
-    let modVal = 0;
-    if (system === 'dnd' && ['str','dex','con','int','wis','cha'].includes(modKey)) {
-        const score = parseInt(rawVal) || 10;
-        modVal = Math.floor((score - 10) / 2);
-    } else {
-        modVal = parseInt(rawVal.replace('+', '')) || 0;
-    }
-    return { val: modVal, name: activeChar.data.name || "Unnamed" };
+    if (window.updateTabletopRoller) window.updateTabletopRoller(system);
 };
 
-// --- CLICK TO ROLL ENGINE ---
-document.addEventListener('click', (e) => {
-    const target = e.target.closest('.rollable');
-    if (target && !window.viewingParty && document.getElementById('dynamic-sheet-container')?.contains(target)) {
-        const statName = target.getAttribute('data-name');
-        const modTarget = target.getAttribute('data-mod-target');
-        const isAttr = target.getAttribute('data-is-attr') === 'true';
-        const diceType = target.getAttribute('data-dice') || '1d20';
+// --- ADVANCED DICE ENGINE ---
+window.updateTabletopRoller = function(system) {
+    let container = document.getElementById('dynamic-dice-controls');
+    if (!container) {
+        const toolbar = document.querySelector('.kokonut-toolbar > div');
+        if (toolbar) {
+            container = document.createElement('div');
+            container.id = 'dynamic-dice-controls';
+            container.style = 'display: flex; gap: 8px; align-items: center; margin-left: 10px;';
+            toolbar.appendChild(container);
+        } else return;
+    }
 
+    let defaultCount = 1;
+    let defaultSides = 20;
+    if (system === 'daggerheart') { defaultCount = 2; defaultSides = 12; }
+    if (system === 'aquelarre') { defaultSides = 100; }
+    if (system === 'vampire') { defaultSides = 10; }
+
+    let statOptions = '';
+    const rollables = document.querySelectorAll('#dynamic-sheet-container .rollable');
+    const addedStats = new Set();
+
+    rollables.forEach(el => {
+        const statName = el.getAttribute('data-name');
+        if (!statName) return; // FIX: Prevents crash if name is missing!
+        
+        const modTarget = el.getAttribute('data-mod-target');
+        const isAttr = el.getAttribute('data-is-attr') === 'true';
+        
         let modVal = 0;
         if (modTarget) {
             const inputEl = document.querySelector(`input[data-key="${modTarget}"]`);
@@ -364,46 +311,243 @@ document.addEventListener('click', (e) => {
                 if (isAttr && !rawVal.includes('+') && !rawVal.includes('-')) {
                     const score = parseInt(rawVal) || 10;
                     modVal = Math.floor((score - 10) / 2); 
-                } else { modVal = parseInt(rawVal.replace('+', '')) || 0; }
+                } else { 
+                    modVal = parseInt(rawVal.replace('+', '')) || 0; 
+                }
             }
         }
+        
+        const cleanLabel = statName.replace(' Check', '').replace(' Roll', '');
+        if (!addedStats.has(cleanLabel)) {
+            statOptions += `<option value="${modVal}" data-statname="${cleanLabel}">${cleanLabel} (${modVal >= 0 ? '+'+modVal : modVal})</option>`;
+            addedStats.add(cleanLabel);
+        }
+    });
 
-        const [countStr, type] = diceType.split('d');
-        const count = parseInt(countStr) || 1; const sides = parseInt(type) || 20;
+    container.innerHTML = `
+        <div style="display:flex; align-items:center; background: rgba(0,0,0,0.6); border: 1px solid var(--accent-main); border-radius: 8px; padding: 2px 6px; box-shadow: 0 2px 10px rgba(0,0,0,0.5); gap: 5px;">
+            <input type="number" id="manual-dice-count" class="kokonut-input" value="${defaultCount}" min="1" max="50" style="width: 35px; height: 26px; padding: 0 2px; font-size: 13px; text-align: center; border: none !important; background: transparent !important; color: white;" title="Amount">
+            <span style="color: var(--text-muted); font-size: 13px; font-weight: bold;">d</span>
+            <select id="manual-dice-type" class="config-select kokonut-select" style="height: 26px; padding: 0 2px; border: none !important; background: transparent !important; font-size: 13px; font-weight: bold; color: var(--accent-main) !important; cursor: pointer;">
+                <option value="4" ${defaultSides===4?'selected':''}>4</option>
+                <option value="6" ${defaultSides===6?'selected':''}>6</option>
+                <option value="8" ${defaultSides===8?'selected':''}>8</option>
+                <option value="10" ${defaultSides===10?'selected':''}>10</option>
+                <option value="12" ${defaultSides===12?'selected':''}>12</option>
+                <option value="20" ${defaultSides===20?'selected':''}>20</option>
+                <option value="100" ${defaultSides===100?'selected':''}>100</option>
+            </select>
+            
+            <div style="width: 1px; height: 16px; background: var(--border-color); margin: 0 4px;"></div>
+            
+            <input type="text" id="manual-dice-name" class="kokonut-input" placeholder="Roll name..." value="Custom Roll" style="width: 100px; height: 26px; padding: 0 6px; font-size: 12px; border: none !important; background: transparent !important; color: white;" title="Roll Name (e.g. Fireball, Persuasion)">
+            
+            <select id="manual-dice-stat-pick" class="config-select kokonut-select" style="width: 24px; height: 26px; padding: 0; border: none !important; background: transparent !important; font-size: 12px; color: var(--text-main) !important; cursor: pointer; text-align: center;" title="Quick Pick from Sheet" onchange="
+                if(this.value !== '') {
+                    document.getElementById('manual-dice-name').value = this.options[this.selectedIndex].getAttribute('data-statname');
+                    document.getElementById('manual-dice-mod').value = this.value;
+                }
+                this.value = '';
+            ">
+                <option value="" disabled selected>▼</option>
+                ${statOptions}
+            </select>
 
-        const results = [];
+            <span style="color: var(--text-muted); font-size: 13px; font-weight: bold;">+</span>
+            <input type="number" id="manual-dice-mod" class="kokonut-input" value="0" style="width: 35px; height: 26px; padding: 0 2px; font-size: 13px; text-align: center; border: none !important; background: transparent !important; color: white;" title="Modifier">
+            
+            <button id="execute-manual-roll" class="primary-btn glow-btn kokonut-btn" style="padding: 4px 10px; font-size: 11px; border-radius: 6px; font-weight: bold; margin-left: 4px;">ROLL</button>
+        </div>
+    `;
+};
+
+window.animateDiceRoll2D = function(results, diceType, customClasses) {
+    const layer = document.getElementById('dice-layer');
+    if (!layer) return;
+    
+    if (diceType === 'd') diceType = 'd20';
+    
+    results.forEach((res, i) => {
+        const diceEl = document.createElement('div');
+        let cClass = '';
+        if (Array.isArray(customClasses)) cClass = customClasses[i] || '';
+        else if (customClasses) cClass = customClasses;
+
+        diceEl.className = `die-2d shape-${diceType} ${cClass}`;
+        
+        const tx = (Math.random() * 400 - 200) + 'px';
+        const ty = (Math.random() * 400 - 200) + 'px';
+        diceEl.style.setProperty('--tx', tx);
+        diceEl.style.setProperty('--ty', ty);
+        
+        diceEl.innerHTML = `<span>${res}</span>`;
+        layer.appendChild(diceEl);
+        
+        setTimeout(() => {
+            diceEl.style.opacity = '0';
+            setTimeout(() => diceEl.remove(), 500);
+        }, 3500);
+    });
+};
+
+function rollDice(count, sides, modVal, statName, targetEl) {
+    const currentName = document.getElementById('display-username')?.textContent || 'User';
+    const charNameInput = document.querySelector('input[data-key="name"]');
+    const charName = (charNameInput && charNameInput.value && !window.viewingParty) ? charNameInput.value : currentName;
+
+    let results = [];
+    let message = "";
+    let customClasses = null;
+
+    if (count === 2 && sides === 12) {
+        const hope = Math.floor(Math.random() * 12) + 1;
+        const fear = Math.floor(Math.random() * 12) + 1;
+        results = [hope, fear];
+        customClasses = ['dh-hope', 'dh-fear']; 
+        
+        const total = hope + fear + modVal;
+        const modString = modVal !== 0 ? (modVal > 0 ? `+${modVal}` : `${modVal}`) : '';
+        
+        let outcome = "";
+        if (hope === fear) outcome = "🌟 <strong style='color:#fbbf24'>CRITICAL SUCCESS!</strong>";
+        else if (hope > fear) outcome = "🔵 <strong style='color:#3b82f6'>With HOPE</strong>";
+        else outcome = "🟡 <strong style='color:#eab308'>With FEAR</strong>";
+
+        message = `🎲 **${charName}** rolled **${statName}**: <br>[Hope: ${hope}] + [Fear: ${fear}] ${modString} = <span style="font-size:18px; color:var(--accent-main); font-weight:bold;">${total}</span> <br>${outcome}`;
+    } else {
         const randomBuffer = new Uint32Array(count);
         window.crypto.getRandomValues(randomBuffer);
         for (let i = 0; i < count; i++) results.push(Math.floor((randomBuffer[i] / (0xffffffff + 1)) * sides) + 1);
 
         const sum = results.reduce((a, b) => a + b, 0);
         const total = sum + modVal;
-        const modString = modVal >= 0 ? `+${modVal}` : `${modVal}`;
-        
-        const currentName = document.getElementById('display-username')?.textContent || 'User';
-        const charNameInput = document.querySelector('input[data-key="name"]');
-        const charName = (charNameInput && charNameInput.value) ? charNameInput.value : currentName;
+        const modString = modVal !== 0 ? (modVal > 0 ? `+${modVal}` : `${modVal}`) : '';
 
-        let message = `🎲 **${charName}** rolled **${statName}**: [${results.join(', ')}] ${modString} = **${total}**`;
-        
-        if(diceType === '1d100') {
+        if (sides === 100) {
             message = `🎲 **${charName}** rolled **${statName}**: **${results[0]}** (Target: ${modVal})`;
-        } else if (diceType === '1d10') {
-             const successes = results.filter(r => r >= 6).length;
-             const crits = results.filter(r => r === 10).length;
-             const finalSucc = successes + (Math.floor(crits / 2) * 2);
-             message = `🎲 **${charName}** rolled **${statName}**: [${results.join(', ')}] = **${finalSucc} Successes**`;
+        } else if (sides === 10) {
+            const successes = results.filter(r => r >= 6).length;
+            const crits = results.filter(r => r === 10).length;
+            const finalSucc = successes + (Math.floor(crits / 2) * 2);
+            message = `🎲 **${charName}** rolled **${statName}**: [${results.join(', ')}] = **${finalSucc} Successes**`;
+        } else {
+            message = `🎲 **${charName}** rolled **${statName}**: [${results.join(', ')}] ${modString} = **${total}**`;
+        }
+    }
+
+    if (window.socket && window.socket.readyState === WebSocket.OPEN) {
+        window.socket.send(JSON.stringify({ action: 'chat_message', userId: window.myId, username: currentName, text: message }));
+        window.socket.send(JSON.stringify({ action: 'dice_roll', userId: window.myId, results: results, type: 'd'+sides, customClasses: customClasses }));
+    }
+    
+    if (window.addChatLine) window.addChatLine(currentName, message); 
+    if (window.animateDiceRoll2D) window.animateDiceRoll2D(results, 'd'+sides, customClasses);
+    
+    if (results.includes(sides) && window.triggerFireworks) window.triggerFireworks();
+    if (typeof anime !== 'undefined' && targetEl) anime({ targets: targetEl, scale: [1.2, 1], duration: 400, easing: 'easeOutElastic(1, .5)' });
+}
+
+// --- BULLETPROOF GLOBAL LISTENERS ---
+if (!window.rpgEventsBound) {
+    window.rpgEventsBound = true;
+
+    document.addEventListener('change', (e) => { 
+        if (e.target.id === 'rpg-system-select') {
+            window.applyCampaignSystem(e.target.value, window.isDM);
+        }
+        if (e.target.id === 'character-roster') {
+            window.activeCharId = e.target.value; 
+            updateRosterDropdown(document.getElementById('rpg-system-select').value); 
+            renderCharacterSheet();
+        }
+    });
+
+    document.addEventListener('click', (e) => {
+        if (e.target.closest('#new-char-btn')) {
+            const system = document.getElementById('rpg-system-select').value;
+            const roster = getRoster(system);
+            window.activeCharId = Math.random().toString(36).substr(2, 9);
+            roster.push({ id: window.activeCharId, name: 'New Character', data: {}, portrait: null });
+            saveRoster(system, roster); 
+            updateRosterDropdown(system); 
+            renderCharacterSheet();
+        }
+        if (e.target.closest('#view-party-btn')) {
+            window.viewingParty = !window.viewingParty;
+            const btn = document.getElementById('view-party-btn');
+            const controls = [document.getElementById('rpg-system-select'), document.getElementById('character-roster'), document.getElementById('new-char-btn'), document.querySelector('.sheet-divider')];
+            
+            if (window.viewingParty) {
+                if(btn) btn.innerText = "👤 My Character"; 
+                controls.forEach(el => { if (el) el.style.display = 'none'; }); 
+                const portrait = document.getElementById('char-portrait-img'); if(portrait) portrait.style.display = 'none';
+                const spawnBtn = document.getElementById('spawn-char-token-btn'); if(spawnBtn) spawnBtn.style.display = 'none';
+                window.renderPartyList();
+            } else {
+                if(btn) btn.innerText = "👁️ Party Sheets"; 
+                controls.forEach(el => { if (el) el.style.display = 'block'; }); 
+                const portrait = document.getElementById('char-portrait-img'); if(portrait) portrait.style.display = 'block';
+                const spawnBtn = document.getElementById('spawn-char-token-btn'); if(spawnBtn) spawnBtn.style.display = 'block';
+                renderCharacterSheet(); 
+            }
+        }
+        if (e.target.closest('#tab-dm-btn')) {
+            if (window.renderPartyList) window.renderPartyList();
+            renderNpcs();
+        }
+        if (e.target.closest('#add-npc-btn')) {
+            window.npcRoster.push({ id: Math.random().toString(36).substr(2,9), name: 'New Goblin', hp: 7, ac: 15, portrait: null });
+            saveNpcs(); renderNpcs();
+        }
+        if (e.target.closest('#spawn-char-token-btn')) {
+            const sys = document.getElementById('rpg-system-select').value;
+            const roster = getRoster(sys);
+            const activeChar = roster.find(c => c.id === window.activeCharId);
+            if (!activeChar || !activeChar.portrait) return alert("Please click your portrait above and upload an image first!");
+            const asset = { id: window.myId + '-' + window.activeCharId, name: activeChar.name, src: activeChar.portrait, type: 'token', ownerId: window.myId };
+            if (window.placeTokenOnMap) window.placeTokenOnMap(asset, true);
+            document.querySelector('[data-tab="rpg"]')?.click();
         }
 
-        if (window.socket && window.socket.readyState === WebSocket.OPEN) window.socket.send(JSON.stringify({ action: 'chat_message', userId: window.myId, username: currentName, text: message }));
-        if(window.addChatLine) window.addChatLine(currentName, message); 
-        if(window.animateDiceRoll2D) window.animateDiceRoll2D(results, 'd'+sides);
-        if(results.includes(sides) && window.triggerFireworks) window.triggerFireworks();
-        
-        if(typeof anime !== 'undefined') anime({ targets: target, scale: [1.3, 1], duration: 400, easing: 'easeOutElastic(1, .5)' });
-    }
-});
+        const manualBtn = e.target.closest('#execute-manual-roll');
+        if (manualBtn) {
+            const count = parseInt(document.getElementById('manual-dice-count').value) || 1;
+            const sides = parseInt(document.getElementById('manual-dice-type').value) || 20;
+            const modVal = parseInt(document.getElementById('manual-dice-mod').value) || 0;
+            const nameInput = document.getElementById('manual-dice-name');
+            const statName = nameInput && nameInput.value.trim() ? nameInput.value.trim() : "Custom Roll";
 
+            rollDice(count, sides, modVal, statName, manualBtn);
+            return;
+        }
+
+        const target = e.target.closest('.rollable');
+        if (target && !window.viewingParty && document.getElementById('dynamic-sheet-container')?.contains(target)) {
+            const statName = target.getAttribute('data-name');
+            const modTarget = target.getAttribute('data-mod-target');
+            const isAttr = target.getAttribute('data-is-attr') === 'true';
+
+            let modVal = 0;
+            if (modTarget) {
+                const inputEl = document.querySelector(`input[data-key="${modTarget}"]`);
+                if (inputEl) {
+                    let rawVal = inputEl.value;
+                    if (isAttr && !rawVal.includes('+') && !rawVal.includes('-')) {
+                        const score = parseInt(rawVal) || 10;
+                        modVal = Math.floor((score - 10) / 2); 
+                    } else { modVal = parseInt(rawVal.replace('+', '')) || 0; }
+                }
+            }
+
+            const diceType = target.getAttribute('data-dice') || '1d20';
+            const [countStr, type] = diceType.split('d');
+            const count = parseInt(countStr) || 1; 
+            const sides = parseInt(type) || 20;
+
+            rollDice(count, sides, modVal, statName, target);
+        }
+    });
+}
 
 // --- CROPPER ENGINE ---
 window.cropMode = 'avatar';
@@ -412,98 +556,115 @@ window.activeNpcCropId = null;
 window.rawUploadedImage = null;
 window.cropScale = 1; window.imgX = 0; window.imgY = 0; window.isDraggingImg = false; window.startX = 0; window.startY = 0;
 
-document.addEventListener('click', (e) => {
-    if (e.target.closest('#change-avatar-btn')) { window.cropMode = 'avatar'; document.getElementById('avatar-upload')?.click(); }
-    if (e.target.closest('#char-portrait-img')) { window.cropMode = 'character'; document.getElementById('avatar-upload')?.click(); }
-    if (e.target.closest('#cancel-crop-btn')) { 
-        const ov = document.getElementById('crop-modal-overlay'); if (ov) ov.style.display = 'none'; 
-        const md = document.getElementById('crop-modal'); if (md) md.style.display = 'none'; 
-    }
-    if (e.target.closest('#save-crop-btn')) {
-        const canvas = document.createElement('canvas'); canvas.width = 200; canvas.height = 200; const ctx = canvas.getContext('2d');
-        const img = new Image(); img.src = window.rawUploadedImage;
-        img.onload = () => {
-            ctx.clearRect(0, 0, 200, 200); ctx.save(); ctx.beginPath(); ctx.arc(100, 100, 100, 0, Math.PI * 2); ctx.clip(); 
-            const targetImg = document.getElementById('crop-image-target');
-            const w = targetImg.naturalWidth; const h = targetImg.naturalHeight;
-            const drawX = 100 - (w * window.cropScale) / 2 + (window.imgX - (200 - w) / 2);
-            const drawY = 100 - (h * window.cropScale) / 2 + (window.imgY - (200 - h) / 2);
-
-            ctx.drawImage(img, drawX, drawY, w * window.cropScale, h * window.cropScale); ctx.restore();
-            const croppedDataUrl = canvas.toDataURL('image/png');
-            
-            if (window.cropMode === 'avatar') {
-                const prev = document.getElementById('config-avatar-preview'); if(prev) prev.src = croppedDataUrl; 
-                const ua = document.getElementById('user-avatar'); if(ua) ua.src = croppedDataUrl;
-                localStorage.setItem('appAvatar', croppedDataUrl);
-            } else if (window.cropMode === 'character') {
-                const cp = document.getElementById('char-portrait-img'); if(cp) cp.src = croppedDataUrl;
-                const system = document.getElementById('rpg-system-select').value;
-                const roster = getRoster(system);
-                const charIndex = roster.findIndex(c => c.id === window.activeCharId);
-                if (charIndex > -1) { roster[charIndex].portrait = croppedDataUrl; saveRoster(system, roster); window.saveCharacterSheet(system); }
-            } else if (window.cropMode === 'npc') {
-                const npc = window.npcRoster.find(n => n.id === window.activeNpcCropId);
-                if (npc) { npc.portrait = croppedDataUrl; saveNpcs(); renderNpcs(); }
-            }
-
+if (!window.cropperEventsBound) {
+    window.cropperEventsBound = true;
+    
+    document.addEventListener('click', (e) => {
+        if (e.target.closest('#change-avatar-btn')) { window.cropMode = 'avatar'; document.getElementById('avatar-upload')?.click(); }
+        if (e.target.closest('#char-portrait-img')) { window.cropMode = 'character'; document.getElementById('avatar-upload')?.click(); }
+        if (e.target.closest('#cancel-crop-btn')) { 
             const ov = document.getElementById('crop-modal-overlay'); if (ov) ov.style.display = 'none'; 
-            const md = document.getElementById('crop-modal'); if (md) md.style.display = 'none';
-        };
-    }
-});
+            const md = document.getElementById('crop-modal'); if (md) md.style.display = 'none'; 
+        }
+        if (e.target.closest('#save-crop-btn')) {
+            const canvas = document.createElement('canvas'); canvas.width = 200; canvas.height = 200; const ctx = canvas.getContext('2d');
+            const img = new Image(); img.src = window.rawUploadedImage;
+            img.onload = () => {
+                ctx.clearRect(0, 0, 200, 200); ctx.save(); ctx.beginPath(); ctx.arc(100, 100, 100, 0, Math.PI * 2); ctx.clip(); 
+                const targetImg = document.getElementById('crop-image-target');
+                const w = targetImg.naturalWidth; const h = targetImg.naturalHeight;
+                const drawX = 100 - (w * window.cropScale) / 2 + (window.imgX - (200 - w) / 2);
+                const drawY = 100 - (h * window.cropScale) / 2 + (window.imgY - (200 - h) / 2);
 
-document.addEventListener('change', (event) => {
-    if (event.target.id === 'avatar-upload') {
-        const file = event.target.files[0];
-        if (!file) return;
-        const reader = new FileReader();
-        reader.onload = (e) => {
-            window.rawUploadedImage = e.target.result;
-            const targetImg = document.getElementById('crop-image-target');
-            if (targetImg) {
-                targetImg.src = window.rawUploadedImage;
-                targetImg.onload = () => {
-                    const minDimension = Math.min(targetImg.naturalWidth, targetImg.naturalHeight);
-                    window.cropScale = 200 / minDimension; 
-                    const zoomSlider = document.getElementById('crop-zoom-slider');
-                    if (zoomSlider) {
-                        zoomSlider.min = Math.min(0.01, window.cropScale / 3);
-                        zoomSlider.max = Math.max(5, window.cropScale * 5);
-                        zoomSlider.value = window.cropScale;
-                    }
-                    window.imgX = (200 - targetImg.naturalWidth) / 2; 
-                    window.imgY = (200 - targetImg.naturalHeight) / 2;
-                    updateImageTransform();
-                    
-                    const ov = document.getElementById('crop-modal-overlay'); if (ov) ov.style.display = 'block'; 
-                    const md = document.getElementById('crop-modal'); if (md) md.style.display = 'flex';
-                };
-            }
-        };
-        reader.readAsDataURL(file);
-    }
-});
+                ctx.drawImage(img, drawX, drawY, w * window.cropScale, h * window.cropScale); ctx.restore();
+                const croppedDataUrl = canvas.toDataURL('image/png');
+                
+                if (window.cropMode === 'avatar') {
+                    const prev = document.getElementById('config-avatar-preview'); if(prev) prev.src = croppedDataUrl; 
+                    const ua = document.getElementById('user-avatar'); if(ua) ua.src = croppedDataUrl;
+                    localStorage.setItem('appAvatar', croppedDataUrl);
+                } else if (window.cropMode === 'character') {
+                    const cp = document.getElementById('char-portrait-img'); if(cp) cp.src = croppedDataUrl;
+                    const system = document.getElementById('rpg-system-select').value;
+                    const roster = getRoster(system);
+                    const charIndex = roster.findIndex(c => c.id === window.activeCharId);
+                    if (charIndex > -1) { roster[charIndex].portrait = croppedDataUrl; saveRoster(system, roster); window.saveCharacterSheet(system); }
+                } else if (window.cropMode === 'npc') {
+                    const npc = window.npcRoster.find(n => n.id === window.activeNpcCropId);
+                    if (npc) { npc.portrait = croppedDataUrl; saveNpcs(); renderNpcs(); }
+                }
+
+                const ov = document.getElementById('crop-modal-overlay'); if (ov) ov.style.display = 'none'; 
+                const md = document.getElementById('crop-modal'); if (md) md.style.display = 'none';
+            };
+        }
+    });
+
+    document.addEventListener('change', (event) => {
+        if (event.target.id === 'avatar-upload') {
+            const file = event.target.files[0];
+            if (!file) return;
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                window.rawUploadedImage = e.target.result;
+                const targetImg = document.getElementById('crop-image-target');
+                if (targetImg) {
+                    targetImg.src = window.rawUploadedImage;
+                    targetImg.onload = () => {
+                        const minDimension = Math.min(targetImg.naturalWidth, targetImg.naturalHeight);
+                        window.cropScale = 200 / minDimension; 
+                        const zoomSlider = document.getElementById('crop-zoom-slider');
+                        if (zoomSlider) {
+                            zoomSlider.min = Math.min(0.01, window.cropScale / 3);
+                            zoomSlider.max = Math.max(5, window.cropScale * 5);
+                            zoomSlider.value = window.cropScale;
+                        }
+                        window.imgX = (200 - targetImg.naturalWidth) / 2; 
+                        window.imgY = (200 - targetImg.naturalHeight) / 2;
+                        updateImageTransform();
+                        
+                        const ov = document.getElementById('crop-modal-overlay'); if (ov) ov.style.display = 'block'; 
+                        const md = document.getElementById('crop-modal'); if (md) md.style.display = 'flex';
+                    };
+                }
+            };
+            reader.readAsDataURL(file);
+        }
+    });
+
+    document.addEventListener('mousedown', (e) => { 
+        const viewport = document.getElementById('crop-viewport');
+        if (viewport && viewport.contains(e.target)) {
+            window.isDraggingImg = true; window.startX = e.clientX - window.imgX; window.startY = e.clientY - window.imgY; viewport.style.cursor = 'grabbing'; 
+        }
+    });
+    document.addEventListener('mousemove', (e) => { 
+        if (!window.isDraggingImg) return; window.imgX = e.clientX - window.startX; window.imgY = e.clientY - window.startY; updateImageTransform(); 
+    });
+    document.addEventListener('wheel', (e) => {
+        const cropModal = document.getElementById('crop-modal');
+        if (cropModal && cropModal.style.display !== 'none' && cropModal.contains(e.target)) {
+            e.preventDefault();
+            const zoomStep = 0.05;
+            if (e.deltaY < 0) window.cropScale = Math.min(5.0, window.cropScale + zoomStep);
+            else window.cropScale = Math.max(0.05, window.cropScale - zoomStep);
+            
+            const slider = document.getElementById('crop-zoom-slider');
+            if (slider) slider.value = window.cropScale;
+            if (typeof updateImageTransform === 'function') updateImageTransform();
+        }
+    }, { passive: false });
+    document.addEventListener('mouseup', () => { window.isDraggingImg = false; const v = document.getElementById('crop-viewport'); if(v) v.style.cursor = 'grab'; });
+
+    document.addEventListener('input', (e) => {
+        if (e.target.id === 'crop-zoom-slider') { window.cropScale = parseFloat(e.target.value); updateImageTransform(); }
+    });
+}
 
 function updateImageTransform() { 
     const targetImg = document.getElementById('crop-image-target');
     if (targetImg) targetImg.style.transform = `translate(${window.imgX}px, ${window.imgY}px) scale(${window.cropScale})`; 
 }
-
-document.addEventListener('mousedown', (e) => { 
-    const viewport = document.getElementById('crop-viewport');
-    if (viewport && viewport.contains(e.target)) {
-        window.isDraggingImg = true; window.startX = e.clientX - window.imgX; window.startY = e.clientY - window.imgY; viewport.style.cursor = 'grabbing'; 
-    }
-});
-document.addEventListener('mousemove', (e) => { 
-    if (!window.isDraggingImg) return; window.imgX = e.clientX - window.startX; window.imgY = e.clientY - window.startY; updateImageTransform(); 
-});
-document.addEventListener('mouseup', () => { window.isDraggingImg = false; const v = document.getElementById('crop-viewport'); if(v) v.style.cursor = 'grab'; });
-
-document.addEventListener('input', (e) => {
-    if (e.target.id === 'crop-zoom-slider') { window.cropScale = parseFloat(e.target.value); updateImageTransform(); }
-});
 
 // -- NPC MANAGER --
 window.npcRoster = JSON.parse(localStorage.getItem('conflict_npcs') || '[]');
