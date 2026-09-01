@@ -9,12 +9,16 @@ let wss = null; let server = null; let tunnelProcess = null;
 
 function getLocalIp() {
     const interfaces = os.networkInterfaces();
+    let lanIp = '127.0.0.1';
     for (const name of Object.keys(interfaces)) {
         for (const iface of interfaces[name]) {
-            if (iface.family === 'IPv4' && !iface.internal) return iface.address;
+            if (iface.family === 'IPv4' && !iface.internal) {
+                if (iface.address.startsWith('26.')) return iface.address; 
+                lanIp = iface.address;
+            }
         }
     }
-    return '127.0.0.1';
+    return lanIp;
 }
 
 function startLocalServer(baseDir) {
@@ -41,7 +45,9 @@ function startLocalServer(baseDir) {
         });
         ws.on('error', (err) => console.error('Client socket error:', err.message));
     });
-    server.listen(8080);
+    
+    // 0.0.0.0 força a liberação da porta para a Internet
+    server.listen(8080, '0.0.0.0');
     return { server, wss, lanIp: `${getLocalIp()}:8080` };
 }
 
@@ -50,11 +56,14 @@ async function startHostTunnel() {
     for (let i = 0; i < 3 && !tunnel; i++) {
         const code = Math.random().toString(36).substring(2, 8);
         try {
-            tunnel = await new Promise((res, rej) => localtunnel({ port: 8080, subdomain: `conflict-${code}` }, (err, t) => err ? rej(err) : res(t)));
+            tunnel = await localtunnel({ port: 8080, subdomain: `conflict-${code}` });
             shareCode = code;
         } catch (err) { continue; }
     }
-    if (tunnel) tunnelProcess = tunnel;
+    if (tunnel) {
+        tunnelProcess = tunnel;
+        tunnel.on('error', (err) => console.log('Tunnel error:', err));
+    }
     return { fullUrl: tunnel ? tunnel.url : null, shareCode };
 }
 

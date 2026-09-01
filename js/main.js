@@ -5,9 +5,8 @@ const { startLocalServer, startHostTunnel, stopServer } = require('./server');
 
 let mainWindow;
 
-// 1. Configure to ask BEFORE downloading
 autoUpdater.setFeedURL({ provider: 'github', owner: 'Aeryn-Mintz', repo: 'conflict' });
-autoUpdater.autoDownload = false; // <-- CRITICAL: Stops the silent background download
+autoUpdater.autoDownload = false; 
 
 app.whenReady().then(() => {
     const rootDir = path.join(__dirname, '..');
@@ -20,8 +19,6 @@ app.whenReady().then(() => {
     });
 
     mainWindow.loadURL('http://localhost:8080/index.html');
-
-    // Trigger the check
     autoUpdater.checkForUpdates();
 
     ipcMain.on('toggle-startup', (event, enable) => {
@@ -48,35 +45,34 @@ app.whenReady().then(() => {
     });
 });
 
-// --- NEW UPDATER FLOW ---
-
-// 1. Found an update -> Ask the user BEFORE downloading
 autoUpdater.on('update-available', (info) => {
     dialog.showMessageBox(mainWindow, {
         type: 'info',
         title: 'Atualização Disponível',
-        message: `A versão ${info.version} do Conflict está disponível! Deseja baixar e instalar agora?`,
-        buttons: ['Sim, atualizar agora', 'Não, agora não']
+        message: `A versão ${info.version} do Conflict está disponível! Deseja baixar e instalar agora? (Arquivo de 106MB)`,
+        buttons: ['Sim, atualizar agora', 'Não, pular']
     }).then((result) => {
         if (result.response === 0) {
-            // User clicked YES -> Show overlay and start download
-            if (mainWindow) mainWindow.webContents.send('update-status', { status: 'downloading', msg: 'Baixando atualização...' });
+            if (mainWindow) mainWindow.webContents.send('update-status', { status: 'downloading', msg: 'Baixando atualização (isso pode demorar)...' });
             autoUpdater.downloadUpdate();
+        } else {
+            // Cancela e permite o usuário jogar
+            if (mainWindow) {
+                mainWindow.webContents.send('update-status', { status: 'none' });
+                mainWindow.webContents.send('update-cancelled');
+            }
         }
     });
 });
 
-// 2. Hide any overlay if no update is found
 autoUpdater.on('update-not-available', () => {
     if (mainWindow) mainWindow.webContents.send('update-status', { status: 'none' });
 });
 
-// 3. Send progress to the visual loading bar
 autoUpdater.on('download-progress', (progressObj) => {
     if (mainWindow) mainWindow.webContents.send('update-progress', progressObj.percent);
 });
 
-// 4. Download complete -> Force install and restart automatically
 autoUpdater.on('update-downloaded', () => {
     if (mainWindow) mainWindow.webContents.send('update-status', { status: 'downloading', msg: 'Reiniciando para instalar...' }); 
     autoUpdater.quitAndInstall();
@@ -86,6 +82,8 @@ app.on('window-all-closed', () => {
     stopServer(); 
     if (process.platform !== 'darwin') app.quit(); 
 });
+
+// Responde ao Launcher EXATAMENTE o que ocorreu no background
 ipcMain.handle('manual-update-check', async () => {
     return new Promise((resolve) => {
         const cleanup = () => {
@@ -93,10 +91,10 @@ ipcMain.handle('manual-update-check', async () => {
             autoUpdater.removeAllListeners('update-available');
             autoUpdater.removeAllListeners('error');
         };
-        autoUpdater.once('update-not-available', () => { cleanup(); resolve(false); });
-        autoUpdater.once('update-available', () => { cleanup(); resolve(true); });
-        autoUpdater.once('error', () => { cleanup(); resolve(false); });
+        autoUpdater.once('update-not-available', () => { cleanup(); resolve('clear'); });
+        autoUpdater.once('update-available', () => { cleanup(); resolve('update-found'); });
+        autoUpdater.once('error', () => { cleanup(); resolve('error'); });
         
-        autoUpdater.checkForUpdates().catch(() => { cleanup(); resolve(false); });
+        autoUpdater.checkForUpdates().catch(() => { cleanup(); resolve('error'); });
     });
 });
