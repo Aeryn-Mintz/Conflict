@@ -145,14 +145,16 @@
                     <!-- DICE LAYER OVERLAY: Moved outside the map so it stays perfectly centered on your screen! -->
                     <div id="dice-layer" style="position: absolute; top: 0; left: 0; right: 0; bottom: 0; pointer-events: none; z-index: 20;"></div>
                     
-                    <div class="canvas-tools glass-panel floating-tools" style="z-index: 25; position: absolute; bottom: 15px; left: 50%; transform: translateX(-50%); display: flex; align-items: center; gap: 8px;">
-                        <button id="pen-tool" class="tool-btn active kokonut-btn">🖊️</button>
-                        <button id="fog-brush-tool" class="tool-btn kokonut-btn" style="display: none;">🔦</button>
-                        <button id="eraser-tool" class="tool-btn kokonut-btn">🧽</button>
-                        <button id="clear-canvas-btn" class="tool-btn kokonut-btn alert-text">🗑️</button>
-                        <input type="color" id="stroke-color" value="#10b981" class="color-dot">
-                        <input type="range" id="stroke-width" min="1" max="50" value="2" class="kokonut-slider" style="width: 80px;">
-                    </div>
+                   <div class="canvas-tools glass-panel floating-tools" style="z-index: 25; position: absolute; bottom: 15px; left: 50%; transform: translateX(-50%); display: flex; align-items: center; gap: 8px;">
+    <!-- Novo Botão de Seletor como Padrão -->
+    <button id="selector-tool" class="tool-btn active kokonut-btn" title="Selector">👆</button>
+    <button id="pen-tool" class="tool-btn kokonut-btn" title="Draw">🖊️</button>
+    <button id="fog-brush-tool" class="tool-btn kokonut-btn" style="display: none;" title="Fog Brush">🔦</button>
+    <button id="eraser-tool" class="tool-btn kokonut-btn" title="Eraser">🧽</button>
+    <button id="clear-canvas-btn" class="tool-btn kokonut-btn alert-text" title="Clear Canvas">🗑️</button>
+    <input type="color" id="stroke-color" value="#10b981" class="color-dot" title="Ink Color">
+    <input type="range" id="stroke-width" min="1" max="50" value="2" class="kokonut-slider" style="width: 80px;" title="Brush Size">
+</div>
                 </div>
             </div> 
 
@@ -166,6 +168,8 @@
                     <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
                         <span id="sheet-save-status" style="color: var(--accent-main); font-size: 11px; font-weight: bold; opacity: 0; transition: opacity 0.3s;">✓ Auto-Saved</span>
                         <div class="sheet-divider" style="width: 1px; height: 20px; background: var(--border-color);"></div>
+                      <!-- Cole esta linha exatamente ACIMA do <select id="character-roster" -->
+<button id="view-party-btn" class="outline-btn kokonut-btn" style="padding: 6px 12px; font-size: 12px; color: var(--accent-main); border-color: var(--accent-main);">👁️ Party Sheets</button>
                         <select id="character-roster" class="config-select" style="width: 150px;"></select>
                         <button id="new-char-btn" class="secondary-btn kokonut-btn" style="padding: 6px 12px; font-size: 12px;">+ New Character</button>
                     </div>
@@ -304,11 +308,13 @@
         </div>
     </div>
 
-    <!-- Scripts -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/animejs/3.2.1/anime.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/animejs/3.2.1/anime.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
     <script src="js/lang.js"></script>
     <script src="js/core.js"></script>
+    <script src="js/chat.js"></script>
+    <script src="js/av.js"></script>
+    <script src="js/media.js"></script>
     <script src="js/vtt.js"></script>
     <script src="js/rpg.js"></script>
 </body>

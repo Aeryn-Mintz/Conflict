@@ -6,17 +6,12 @@
     <title>Conflict Launcher</title>
     <link rel="stylesheet" href="style.css">
     <style>
-        body {
-            display: flex; align-items: center; justify-content: center;
-            background-image: radial-gradient(circle at 50% 50%, rgba(16, 185, 129, 0.1), transparent 70%);
-            background-color: var(--bg-base, #050a06); color: var(--text-main, #ecfdf5);
-            margin: 0; height: 100vh; font-family: sans-serif;
-        }
+        body { display: flex; align-items: center; justify-content: center; background-image: radial-gradient(circle at 50% 50%, rgba(16, 185, 129, 0.1), transparent 70%); background-color: var(--bg-base, #050a06); color: var(--text-main, #ecfdf5); margin: 0; height: 100vh; font-family: sans-serif; }
         .launcher-box { width: 100%; max-width: 450px; text-align: center; padding: 40px; background: var(--panel-bg, rgba(13, 26, 16, 0.75)); border: 1px solid rgba(16, 185, 129, 0.2); border-radius: 12px; }
         .brand-huge { font-size: 36px; font-weight: 900; margin-bottom: 10px; display: flex; align-items: center; justify-content: center; gap: 15px; text-transform: uppercase; }
         .brand-icon-img { width: 45px; height: 45px; filter: drop-shadow(0 0 15px rgba(16, 185, 129, 0.8)); }
         .subtitle { color: rgba(255,255,255,0.6); margin-bottom: 40px; font-size: 14px; }
-        .choice-btn { width: 100%; padding: 15px; font-size: 16px; margin-bottom: 15px; border-radius: 8px; cursor: pointer; border: none; font-weight: bold; }
+        .choice-btn { width: 100%; padding: 15px; font-size: 16px; margin-bottom: 15px; border-radius: 8px; cursor: pointer; border: none; font-weight: bold; transition: 0.2s; }
         .primary-btn { background: #10b981; color: #000; box-shadow: 0 0 10px rgba(16, 185, 129, 0.4); }
         .secondary-btn { background: rgba(255,255,255,0.1); color: #fff; border: 1px solid rgba(255,255,255,0.2); }
         .outline-btn { background: transparent; color: #fff; border: 1px solid rgba(255,255,255,0.2); }
@@ -28,33 +23,24 @@
     </style>
 </head>
 <body>
-    <!-- UPDATE OVERLAY -->
     <div id="update-overlay" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(5, 10, 6, 0.9); z-index: 9999; justify-content: center; align-items: center; flex-direction: column; backdrop-filter: blur(5px);">
         <div style="width: 40px; height: 40px; border: 4px solid rgba(255, 255, 255, 0.1); border-top-color: #10b981; border-radius: 50%; animation: spin 1s linear infinite;"></div>
-        <span id="update-msg" style="color: #10b981; margin-top: 15px; font-weight: bold;">Checking for updates...</span>
-        <div style="width: 300px; height: 8px; background: rgba(255,255,255,0.1); margin-top: 15px; border-radius: 4px; overflow: hidden;">
-            <div id="update-progress-bar" style="width: 0%; height: 100%; background: #10b981; transition: width 0.2s ease;"></div>
-        </div>
+        <span id="update-msg" style="color: #10b981; margin-top: 15px; font-weight: bold;">Buscando atualizações...</span>
+        <div style="width: 300px; height: 8px; background: rgba(255,255,255,0.1); margin-top: 15px; border-radius: 4px; overflow: hidden;"><div id="update-progress-bar" style="width: 0%; height: 100%; background: #10b981; transition: width 0.2s ease;"></div></div>
     </div>
 
     <div class="launcher-box">
-        <div class="brand-huge">
-            <img src="./conflict-logo.png" alt="Logo" class="brand-icon-img"> 
-            Conflict
-        </div>
+        <div class="brand-huge"><img src="./conflict-logo.png" alt="Logo" class="brand-icon-img"> Conflict</div>
         <div class="subtitle">Secure P2P Comms & Media</div>
 
-        <!-- MAIN CHOICES -->
         <div id="main-choices">
             <button id="host-game-btn" class="primary-btn choice-btn">Host a Room</button>
             <button id="join-game-btn" class="secondary-btn choice-btn">Join a Room</button>
         </div>
 
-        <!-- HOSTING PANEL -->
         <div id="host-panel" class="hidden-panel">
             <h3 style="margin-top: 0; margin-bottom: 10px;">Starting Secure Server...</h3>
             <p id="host-status" style="color: rgba(255,255,255,0.6); font-size: 13px;">Spinning up local tunnel, please wait...</p>
-            
             <div id="invite-section" style="display: none;">
                 <p style="font-size: 13px; margin-bottom: 5px;">Share this Invite Link with friends:</p>
                 <div class="invite-box" id="invite-link-display">Loading...</div>
@@ -62,21 +48,26 @@
             </div>
         </div>
 
-        <!-- JOINING PANEL -->
         <div id="join-panel" class="hidden-panel">
-            <h3 style="margin-top: 0; margin-bottom: 10px;">Join an Existing Room</h3>
-            <p style="color: rgba(255,255,255,0.6); font-size: 13px; margin-bottom: 15px;">Paste the Invite Link from your host below.</p>
-            <input type="url" id="invite-input" placeholder="https://..." style="width: 100%; box-sizing: border-box; margin-bottom: 15px; text-align: center;">
-            <button id="btn-connect-join" class="primary-btn choice-btn">Connect to Link</button>
+            <h3 style="margin-top: 0; margin-bottom: 15px;">Join an Existing Room</h3>
             
-            <!-- RADAR SCANNER UI -->
-            <div style="margin-top: 20px; border-top: 1px solid rgba(255,255,255,0.1); padding-top: 20px;">
-                <h4 style="margin-top: 0; margin-bottom: 10px; font-size: 14px; color: rgba(255,255,255,0.6);">Local & VPN Rooms</h4>
-                <button id="scan-rooms-btn" class="secondary-btn choice-btn" style="margin-bottom: 10px; font-size: 14px; padding: 10px;">📡 Scan Network</button>
-                <div id="radar-results" style="display: flex; flex-direction: column; gap: 8px; max-height: 150px; overflow-y: auto;"></div>
+            <div style="background: rgba(0,0,0,0.3); padding: 15px; border-radius: 8px; margin-bottom: 15px; border: 1px solid rgba(255,255,255,0.05);">
+                <p style="color: rgba(255,255,255,0.6); font-size: 12px; margin-top: 0; margin-bottom: 10px; text-align: left;">Option 1: Code or IP</p>
+                <div style="display: flex; gap: 8px;">
+                    <input type="text" id="invite-input" placeholder="e.g. 26.x.x.x or code" style="flex-grow: 1; box-sizing: border-box; text-align: center;">
+                    <button id="btn-connect-join" class="primary-btn choice-btn" style="width: auto; margin-bottom: 0; padding: 10px 20px;">Connect</button>
+                </div>
             </div>
 
-            <button id="btn-back-join" class="outline-btn choice-btn" style="margin-top: 10px; margin-bottom: 0;">Back</button>
+            <div style="background: rgba(0,0,0,0.3); padding: 15px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.05);">
+                <p style="color: rgba(255,255,255,0.6); font-size: 12px; margin-top: 0; margin-bottom: 10px; display: flex; justify-content: space-between;">Option 2: Network Radar <span id="radar-spinner" style="display:none; color: #10b981;">Scanning...</span></p>
+                <div id="radar-results" style="display: flex; flex-direction: column; gap: 8px; max-height: 140px; overflow-y: auto;">
+                    <span style="color: rgba(255,255,255,0.4); font-size: 12px;">Click scan to find local rooms.</span>
+                </div>
+                <button id="scan-rooms-btn" class="secondary-btn choice-btn" style="margin-bottom: 0; margin-top: 10px; font-size: 14px; padding: 10px;">📡 Scan Network</button>
+            </div>
+
+            <button id="btn-back-join" class="outline-btn choice-btn" style="margin-top: 15px; margin-bottom: 0;">Back</button>
         </div>
     </div>
 
@@ -90,174 +81,139 @@
         const hostPanel = document.getElementById('host-panel');
         const joinPanel = document.getElementById('join-panel');
 
-        // --- UPDATER LOGIC ---
         let hasCheckedForUpdates = false;
-        async function performActionWithUpdateCheck(actionCallback) {
+
+        function performActionWithUpdateCheck(actionCallback) {
             if (ipcRenderer && !hasCheckedForUpdates) {
-                hasCheckedForUpdates = true; 
-                const overlay = document.getElementById('update-overlay'); 
+                hasCheckedForUpdates = true;
+                const overlay = document.getElementById('update-overlay');
                 const msg = document.getElementById('update-msg');
-                if(overlay) overlay.style.display = 'flex';
-                if(msg) msg.innerText = window.conflictTranslations[localStorage.getItem('conflictLang') || 'en']?.updateCheck || 'Checking for updates...';
-                try {
-                    await Promise.race([ ipcRenderer.invoke('manual-update-check'), new Promise(res => setTimeout(res, 4000)) ]);
-                } catch(e) {}
-                if(overlay) overlay.style.display = 'none';
+
+                if (overlay) overlay.style.display = 'flex';
+                if (msg) msg.innerText = 'Buscando atualizações no GitHub...';
+
+                let resolved = false;
+
+                const finishFlow = () => {
+                    if (resolved) return;
+                    resolved = true;
+                    if (overlay) overlay.style.display = 'none';
+                    actionCallback();
+                };
+
+                // Escuta respostas de cancelamento ou não existência de update
+                ipcRenderer.once('update-cancelled', finishFlow);
+                
+                ipcRenderer.on('update-status', (event, data) => {
+                    if (data.status === 'none') {
+                        finishFlow();
+                    } else if (data.status === 'downloading') {
+                        if (msg) msg.innerText = data.msg;
+                    }
+                });
+
+                // Dispara o gatilho sem usar Timeout arbitrário
+                ipcRenderer.invoke('manual-update-check').catch(finishFlow);
+
+                // Failsafe absoluto de 12 segundos apenas para garantir que não trave se a rede cair
+                setTimeout(finishFlow, 12000);
+            } else {
+                actionCallback();
             }
-            actionCallback();
         }
 
-        ipcRenderer.on('update-status', (event, data) => {
-            const overlay = document.getElementById('update-overlay'); 
-            const msgEl = document.getElementById('update-msg');
-            if (data.status === 'checking' || data.status === 'downloading') { 
-                overlay.style.display = 'flex'; 
-                if (msgEl) msgEl.innerText = data.msg; 
-            } else { overlay.style.display = 'none'; }
-        });
-        
         ipcRenderer.on('update-progress', (event, percent) => { 
             const bar = document.getElementById('update-progress-bar'); 
             if (bar) bar.style.width = `${percent}%`; 
         });
 
-        // --- HOST LOGIC ---
         document.getElementById('host-game-btn').addEventListener('click', () => {
-            performActionWithUpdateCheck(() => {
-                mainChoices.style.display = 'none';
-                hostPanel.style.display = 'block';
-                ipcRenderer.send('start-host');
-            });
+            performActionWithUpdateCheck(() => { mainChoices.style.display = 'none'; hostPanel.style.display = 'block'; ipcRenderer.send('start-host'); });
         });
 
         ipcRenderer.on('host-started', (event, data) => {
-            document.getElementById('host-status').style.display = 'none';
-            document.getElementById('invite-section').style.display = 'block';
-            
-            const inviteDisplay = document.getElementById('invite-link-display');
-            inviteDisplay.innerHTML = ''; 
-            
+            document.getElementById('host-status').style.display = 'none'; document.getElementById('invite-section').style.display = 'block';
+            const inviteDisplay = document.getElementById('invite-link-display'); inviteDisplay.innerHTML = ''; 
             if (data.shareCode) {
                 localStorage.setItem('conflictShareCode', data.shareCode);
-                inviteDisplay.innerHTML += `
-                    <div style="margin-bottom: 10px;">
-                        <span style="color: rgba(255,255,255,0.6); font-size: 11px;">GLOBAL SHARE CODE:</span><br>
-                        <strong style="font-size: 20px; letter-spacing: 2px; color: #10b981;">${data.shareCode}</strong>
-                    </div>
-                `;
-            } else {
-                inviteDisplay.innerHTML += `<div style="color: #fbbf24; font-size: 12px; margin-bottom: 10px;">⚠️ Offline Mode Active</div>`;
-            }
-
-            inviteDisplay.innerHTML += `
-                <div>
-                    <span style="color: rgba(255,255,255,0.6); font-size: 11px;">LOCAL LAN IP (Offline):</span><br>
-                    <span style="font-size: 14px; color: #10b981;">${data.lanIp}</span>
-                </div>
-            `;
-            
+                inviteDisplay.innerHTML += `<div style="margin-bottom: 10px;"><span style="color: rgba(255,255,255,0.6); font-size: 11px;">GLOBAL SHARE CODE:</span><br><strong style="font-size: 20px; letter-spacing: 2px; color: #10b981;">${data.shareCode}</strong></div>`;
+            } else { inviteDisplay.innerHTML += `<div style="color: #fbbf24; font-size: 12px; margin-bottom: 10px;">⚠️ Offline Mode Active</div>`; }
+            inviteDisplay.innerHTML += `<div><span style="color: rgba(255,255,255,0.6); font-size: 11px;">LOCAL LAN IP (Offline):</span><br><span style="font-size: 14px; color: #10b981;">${data.lanIp}</span></div>`;
             localStorage.setItem('conflictServerUrl', 'ws://localhost:8080');
         });
 
         ipcRenderer.on('host-failed', (event, errorMsg) => {
-            document.getElementById('host-status').innerText = `Error: ${errorMsg}\nTry restarting the app.`;
-            document.getElementById('host-status').style.color = "#ef4444";
+            document.getElementById('host-status').innerText = `Error: ${errorMsg}\nTry restarting the app.`; document.getElementById('host-status').style.color = "#ef4444";
         });
 
-        document.getElementById('btn-enter-hosted').addEventListener('click', () => {
-            window.location.href = 'app.html';
-        });
+        document.getElementById('btn-enter-hosted').addEventListener('click', () => window.location.href = 'app.html');
 
-        // --- JOIN LOGIC ---
         document.getElementById('join-game-btn').addEventListener('click', () => {
-            performActionWithUpdateCheck(() => {
-                mainChoices.style.display = 'none';
-                joinPanel.style.display = 'block';
-            });
+            performActionWithUpdateCheck(() => { mainChoices.style.display = 'none'; joinPanel.style.display = 'block'; });
         });
+        document.getElementById('btn-back-join').addEventListener('click', () => { joinPanel.style.display = 'none'; mainChoices.style.display = 'block'; });
 
-        document.getElementById('btn-back-join').addEventListener('click', () => {
-            joinPanel.style.display = 'none';
-            mainChoices.style.display = 'block';
-        });
-
-        document.getElementById('btn-connect-join').addEventListener('click', () => {
+        document.getElementById('btn-connect-join').addEventListener('click', async () => {
             const input = document.getElementById('invite-input').value.trim();
-            if (input) {
-                let wsUrl;
-                const cleaned = input.toLowerCase().replace(/[^a-z0-9.]/g, '');
-                if (input.match(/^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}:\d{4}$/)) {
-                    wsUrl = `ws://${input}`;
-                } else if (/^[a-z0-9]{6}$/.test(cleaned)) {
-                    wsUrl = `https://conflict-${cleaned}.loca.lt`.replace('http', 'ws');
-                } else {
-                    try {
-                        const url = new URL(input.startsWith('http') ? input : `https://${input}`);
-                        wsUrl = url.toString().replace('http', 'ws');
-                    } catch (e) { alert("Invalid Invite Link or IP!"); return; }
-                }
-                localStorage.setItem('conflictServerUrl', wsUrl);
-                window.location.href = 'app.html';
+            if (!input) return;
+            
+            const connectBtn = document.getElementById('btn-connect-join');
+            connectBtn.innerText = "Connecting..."; connectBtn.disabled = true;
+
+            let wsUrl; let httpUrl;
+            const cleaned = input.toLowerCase().replace(/[^a-z0-9.]/g, '');
+            
+            if (input.match(/^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}(:\d+)?$/)) {
+                const ip = input.includes(':') ? input : `${input}:8080`; wsUrl = `ws://${ip}`;
+            } else if (/^[a-z0-9]{6}$/.test(cleaned)) {
+                httpUrl = `https://conflict-${cleaned}.loca.lt`; wsUrl = `wss://conflict-${cleaned}.loca.lt`;
+            } else {
+                try {
+                    const url = new URL(input.startsWith('http') ? input : `https://${input}`);
+                    httpUrl = url.toString(); wsUrl = url.toString().replace(/^http/, 'ws');
+                } catch (e) { alert("Invalid Invite Link or IP!"); connectBtn.innerText = "Connect"; connectBtn.disabled = false; return; }
             }
+
+            if (httpUrl && httpUrl.includes('loca.lt')) {
+                try { await fetch(httpUrl, { headers: { 'Bypass-Tunnel-Reminder': 'true' } }); } catch (e) {} 
+            }
+            localStorage.setItem('conflictServerUrl', wsUrl); window.location.href = 'app.html';
         });
 
-        // --- DIRECT RADAR SCANNER IN LAUNCHER ---
         document.getElementById('scan-rooms-btn').addEventListener('click', () => {
-            const resultsDiv = document.getElementById('radar-results');
-            resultsDiv.innerHTML = '<span style="color: #10b981; font-size: 12px; margin-bottom: 5px;">Scanning subnets...</span>';
-
-            const interfaces = os.networkInterfaces();
+            const resultsDiv = document.getElementById('radar-results'); const spinner = document.getElementById('radar-spinner');
+            resultsDiv.innerHTML = ''; spinner.style.display = 'inline-block';
             const subnets = [];
-            for (const name of Object.keys(interfaces)) {
-                for (const iface of interfaces[name]) {
+            for (const name of Object.keys(os.networkInterfaces())) {
+                for (const iface of os.networkInterfaces()[name]) {
                     if (iface.family === 'IPv4' && !iface.internal) {
                         const parts = iface.address.split('.'); parts.pop(); subnets.push(parts.join('.'));
                     }
                 }
             }
+            let found = 0; let scansComplete = 0; const totalScans = subnets.length * 254;
+            if (totalScans === 0) { spinner.style.display = 'none'; resultsDiv.innerHTML = '<span style="color: #ef4444; font-size: 12px;">No network interfaces found.</span>'; return; }
 
-            let found = 0;
             subnets.forEach(subnet => {
                 for (let i = 1; i <= 254; i++) {
                     const targetIp = `${subnet}.${i}`;
-                    const scanner = new net.Socket(); scanner.setTimeout(800);
+                    const scanner = new net.Socket(); scanner.setTimeout(600);
                     scanner.on('connect', () => {
-                        if (found === 0) resultsDiv.innerHTML = ''; 
                         found++;
-                        const btn = document.createElement('button');
-                        btn.className = 'primary-btn choice-btn';
-                        btn.style.padding = '10px'; btn.style.fontSize = '14px'; btn.style.marginBottom = '0';
-                        btn.innerText = `🟢 Connect to ${targetIp}`;
-                        btn.onclick = () => {
-                            localStorage.setItem('conflictServerUrl', `ws://${targetIp}:8080`);
-                            window.location.href = 'app.html';
-                        };
-                        resultsDiv.appendChild(btn);
-                        scanner.destroy();
+                        const btn = document.createElement('button'); btn.className = 'primary-btn choice-btn'; btn.style.padding = '10px'; btn.style.fontSize = '14px'; btn.style.marginBottom = '0'; btn.innerText = `🟢 Room Found: ${targetIp}`;
+                        btn.onclick = () => { localStorage.setItem('conflictServerUrl', `ws://${targetIp}:8080`); window.location.href = 'app.html'; };
+                        resultsDiv.appendChild(btn); scanner.destroy();
                     });
-                    scanner.on('timeout', () => scanner.destroy()); scanner.on('error', () => scanner.destroy());
+                    const checkDone = () => { scansComplete++; if (scansComplete >= totalScans) { spinner.style.display = 'none'; if (found === 0) resultsDiv.innerHTML += '<span style="color: #ef4444; font-size: 12px;">No active rooms found on your network.</span>'; } };
+                    scanner.on('timeout', () => { scanner.destroy(); checkDone(); }); scanner.on('error', () => { scanner.destroy(); checkDone(); });
                     scanner.connect(8080, targetIp);
                 }
             });
-
-            const history = JSON.parse(localStorage.getItem('conflictRecentRooms') || '[]');
-            history.forEach(ip => {
-                if (found === 0) resultsDiv.innerHTML = '';
-                found++;
-                const btn = document.createElement('button');
-                btn.className = 'secondary-btn choice-btn';
-                btn.style.padding = '10px'; btn.style.fontSize = '14px'; btn.style.marginBottom = '0';
-                btn.innerText = `🕒 History: ${ip}`;
-                btn.onclick = () => {
-                    localStorage.setItem('conflictServerUrl', `ws://${ip}:8080`);
-                    window.location.href = 'app.html';
-                };
+            JSON.parse(localStorage.getItem('conflictRecentRooms') || '[]').forEach(ip => {
+                const btn = document.createElement('button'); btn.className = 'secondary-btn choice-btn'; btn.style.padding = '10px'; btn.style.fontSize = '14px'; btn.style.marginBottom = '0'; btn.innerText = `🕒 History: ${ip}`;
+                btn.onclick = () => { localStorage.setItem('conflictServerUrl', `ws://${ip}:8080`); window.location.href = 'app.html'; };
                 resultsDiv.appendChild(btn);
             });
-
-            setTimeout(() => {
-                if (found === 0) resultsDiv.innerHTML = '<span style="color: #ef4444; font-size: 12px;">No active rooms found on your network.</span>';
-            }, 1000);
         });
     </script>
 </body>
