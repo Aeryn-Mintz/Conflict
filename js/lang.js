@@ -8,7 +8,8 @@ window.conflictTranslations = {
         'restoreMap': '♻️ Restore Map', 'addToken': '♟️ Add Token', 'clearCanvas': '🗑️ Clear Ink',
         'enableFog': '🌫️ Enable Fog', 'disableFog': '🌫️ Disable Fog', 'langLabel': 'Language',
         'hostGame': '🏰 Host Game', 'joinGame': '🔗 Join Game', 'scanRooms': '📡 Scan for Rooms',
-        'charVault': '🛡️ Character Vault', 'updateCheck': 'Checking for updates...', 'radarScanning': 'Scanning network...'
+        'charVault': '🛡️ Character Vault', 'updateCheck': 'Checking for updates...', 'radarScanning': 'Scanning network...',
+        'connectedUsers': '👥 Connected Users'
     },
     'pt-br': {
         'joinCall': '🎙️ Entrar na call', 'listening': '🎧 Ouvindo', 'mute': '🔇 Mutar', 'unmute': '🔈 Desmutar',
@@ -19,7 +20,8 @@ window.conflictTranslations = {
         'restoreMap': '♻️ Restaurar Mapa', 'addToken': '♟️ Add Token', 'clearCanvas': '🗑️ Limpar Desenho',
         'enableFog': '🌫️ Ativar Névoa', 'disableFog': '🌫️ Desativar Névoa', 'langLabel': 'Idioma',
         'hostGame': '🏰 Hospedar Jogo', 'joinGame': '🔗 Entrar numa Sala', 'scanRooms': '📡 Procurar Salas',
-        'charVault': 'Fichas de personagem', 'updateCheck': 'Procurando atualizações...', 'radarScanning': 'Pesquisando na rede...'
+        'charVault': 'Fichas de personagem', 'updateCheck': 'Procurando atualizações...', 'radarScanning': 'Pesquisando na rede...',
+        'connectedUsers': '👥 Usuários Conectados'
     }
 };
 
@@ -46,6 +48,8 @@ window.applyLang = function(lang) {
     setTxt('scan-rooms-btn', t.scanRooms); 
     setTxt('char-vault-title', t.charVault);
     setTxt('tab-vault-btn', t.charVault);
+    setTxt('connected-users-btn', t.connectedUsers);
+    setTxt('connected-users-title', t.connectedUsers);
     
     setPlh('chat-input', t.chatPlaceholder);
     const fogBtn = document.getElementById('toggle-fog-btn');

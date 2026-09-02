@@ -2,7 +2,6 @@
 // EXTERNAL MEDIA ENGINE (YouTube & Soundboard)
 // ==========================================
 
-// --- YOUTUBE LOGIC ---
 window.ytPlayer = null; window.pendingYtVideoId = null; window.ytQueue = []; window.currentQueueIndex = -1;
 function extractYouTubeId(url) {
     if (!url) return null;
@@ -15,15 +14,20 @@ function extractYouTubeId(url) {
 }
 window.ytApiTag = document.createElement('script'); window.ytApiTag.src = 'https://www.youtube.com/iframe_api'; document.head.appendChild(window.ytApiTag);
 window.onYouTubeIframeAPIReady = function () {
-    window.ytPlayer = new YT.Player('yt-iframe', { height: '100%', width: '100%', playerVars: { autoplay: 1, origin: window.location.origin }, events: {
-        onReady: () => { if (window.pendingYtVideoId) { window.loadAndPlayVideo(window.pendingYtVideoId); window.pendingYtVideoId = null; } },
-        onStateChange: (event) => { if (event.data === YT.PlayerState.ENDED) window.playNextInQueue(); },
-        onError: () => { if(window.addChatLine) window.addChatLine('System', "⚠️ That video can't be played here.", true); window.playNextInQueue(); }
-    }});
+    window.ytPlayer = new YT.Player('yt-iframe', { 
+        height: '100%', width: '100%', 
+        // ORIGEM RESTAURADA: Sem falsificação, evitamos o Erro 500 do postMessage
+        playerVars: { autoplay: 1, origin: window.location.origin }, 
+        events: {
+            onReady: () => { if (window.pendingYtVideoId) { window.loadAndPlayVideo(window.pendingYtVideoId); window.pendingYtVideoId = null; } },
+            onStateChange: (event) => { if (event.data === YT.PlayerState.ENDED) window.playNextInQueue(); },
+            onError: () => { if(window.addChatLine) window.addChatLine('System', "⚠️ That video can't be played here.", true); window.playNextInQueue(); }
+        }
+    });
 };
 window.loadAndPlayVideo = function(videoId, index = -1) {
     if (!videoId) return;
-    document.getElementById('yt-wrapper').style.display = 'flex'; if (index !== -1) window.currentQueueIndex = index;
+    document.getElementById('yt-wrapper').style.display = 'block'; if (index !== -1) window.currentQueueIndex = index;
     if (window.ytPlayer && typeof window.ytPlayer.loadVideoById === 'function') window.ytPlayer.loadVideoById(videoId); else window.pendingYtVideoId = videoId;
     window.renderQueueUI();
 };
@@ -52,9 +56,12 @@ document.getElementById('yt-play-btn')?.addEventListener('click', () => { const 
 document.getElementById('yt-skip-btn')?.addEventListener('click', () => { window.playNextInQueue(); if (window.socket && window.socket.readyState === WebSocket.OPEN) window.socket.send(JSON.stringify({ action: 'yt_skip' })); });
 document.getElementById('toggle-queue-btn')?.addEventListener('click', () => { const drawer = document.getElementById('yt-queue-drawer'); drawer.style.display = drawer.style.display === 'flex' ? 'none' : 'flex'; });
 document.getElementById('yt-playpause-btn')?.addEventListener('click', () => { if (!window.ytPlayer || typeof window.ytPlayer.getPlayerState !== 'function') return; if (window.ytPlayer.getPlayerState() === YT.PlayerState.PLAYING) { window.ytPlayer.pauseVideo(); if (window.socket && window.socket.readyState === WebSocket.OPEN) window.socket.send(JSON.stringify({ action: 'yt_pause' })); } else { window.ytPlayer.playVideo(); if (window.socket && window.socket.readyState === WebSocket.OPEN) window.socket.send(JSON.stringify({ action: 'yt_play' })); } });
-document.getElementById('toggle-yt-view')?.addEventListener('click', () => { const wrapper = document.getElementById('yt-wrapper'); wrapper.style.display = (wrapper.style.display === 'none') ? 'flex' : 'none'; });
 
-// --- SOUNDBOARD ---
+document.getElementById('toggle-yt-view')?.addEventListener('click', () => { 
+    const wrapper = document.getElementById('yt-wrapper'); 
+    wrapper.style.display = (wrapper.style.display === 'none' || wrapper.style.display === '') ? 'block' : 'none'; 
+});
+
 document.getElementById('add-sound-btn')?.addEventListener('click', () => document.getElementById('add-sound-upload').click());
 document.getElementById('add-sound-upload')?.addEventListener('change', (event) => {
     const file = event.target.files[0]; if (!file) return;
@@ -63,9 +70,18 @@ document.getElementById('add-sound-upload')?.addEventListener('change', (event) 
         if (tempAudio.duration > 5) return alert(`Error: Audio must be 5 seconds or less.`);
         const btn = document.createElement('button'); btn.textContent = file.name.split('.')[0]; btn.className = 'secondary-btn';
         btn.onclick = () => {
+            if (window.initAudioCtx) window.initAudioCtx(); 
             const effectAudio = new Audio(audioUrl);
             const outId = localStorage.getItem('appAudioOut'); if (outId && typeof effectAudio.setSinkId === 'function') effectAudio.setSinkId(outId).catch(()=>{});
-            if (window.audioCtx) { const source = window.audioCtx.createMediaElementSource(effectAudio); const gainNode = window.audioCtx.createGain(); gainNode.gain.value = Math.min(parseFloat(document.getElementById('effectsVolumeSlider').value), 1); source.connect(gainNode); gainNode.connect(window.audioCtx.destination); gainNode.connect(window.soundboardDest); }
+            
+            if (window.audioCtx && window.soundboardDest) { 
+                const source = window.audioCtx.createMediaElementSource(effectAudio); 
+                const gainNode = window.audioCtx.createGain(); 
+                gainNode.gain.value = Math.min(parseFloat(document.getElementById('effectsVolumeSlider')?.value || 1), 1); 
+                source.connect(gainNode); 
+                gainNode.connect(window.audioCtx.destination); 
+                gainNode.connect(window.soundboardDest); 
+            }
             effectAudio.play();
             if (window.socket && window.socket.readyState === WebSocket.OPEN) window.socket.send(JSON.stringify({ action: 'sound_played', userId: window.myId, soundName: btn.textContent }));
         };

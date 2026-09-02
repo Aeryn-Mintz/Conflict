@@ -1,7 +1,13 @@
-const { app, BrowserWindow, ipcMain, desktopCapturer, session, dialog } = require('electron');
+const { app, BrowserWindow, ipcMain, desktopCapturer, session, dialog, shell } = require('electron');
 const { autoUpdater } = require('electron-updater');
 const path = require('path');
 const { startLocalServer, startHostTunnel, stopServer } = require('./server');
+
+// CRUCIAL: Desativa a camuflagem mDNS e autoriza o Áudio a tocar sem bloqueios silenciosos
+app.commandLine.appendSwitch('disable-features', 'WebRtcHideLocalIpsWithMdns');
+app.commandLine.appendSwitch('enforce-webrtc-ip-permission-check', 'false');
+app.commandLine.appendSwitch('force-webrtc-ip-handling-policy', 'default');
+app.commandLine.appendSwitch('autoplay-policy', 'no-user-gesture-required'); 
 
 let mainWindow;
 
@@ -19,7 +25,6 @@ app.whenReady().then(() => {
     });
 
     mainWindow.loadURL('http://localhost:8080/index.html');
-    autoUpdater.checkForUpdates();
 
     ipcMain.on('toggle-startup', (event, enable) => {
         app.setLoginItemSettings({ openAtLogin: enable, path: app.getPath('exe') });
@@ -36,6 +41,7 @@ app.whenReady().then(() => {
 
     session.defaultSession.webRequest.onBeforeSendHeaders((details, callback) => {
         details.requestHeaders['Bypass-Tunnel-Reminder'] = 'true';
+        details.requestHeaders['User-Agent'] = 'localtunnel'; 
         callback({ requestHeaders: details.requestHeaders });
     });
 
@@ -45,56 +51,27 @@ app.whenReady().then(() => {
     });
 });
 
-autoUpdater.on('update-available', (info) => {
-    dialog.showMessageBox(mainWindow, {
-        type: 'info',
-        title: 'Atualização Disponível',
-        message: `A versão ${info.version} do Conflict está disponível! Deseja baixar e instalar agora? (Arquivo de 106MB)`,
-        buttons: ['Sim, atualizar agora', 'Não, pular']
-    }).then((result) => {
-        if (result.response === 0) {
-            if (mainWindow) mainWindow.webContents.send('update-status', { status: 'downloading', msg: 'Baixando atualização (isso pode demorar)...' });
-            autoUpdater.downloadUpdate();
-        } else {
-            // Cancela e permite o usuário jogar
-            if (mainWindow) {
-                mainWindow.webContents.send('update-status', { status: 'none' });
-                mainWindow.webContents.send('update-cancelled');
-            }
-        }
+ipcMain.handle('manual-update-check', async () => {
+    return new Promise((resolve) => {
+        autoUpdater.once('update-available', (info) => {
+            dialog.showMessageBox(mainWindow, {
+                type: 'info', 
+                title: 'Atualização Disponível',
+                message: `A versão ${info.version} do Conflict está disponível!\n\nDeseja abrir o GitHub para baixar a nova versão?`,
+                buttons: ['Sim, abrir o GitHub', 'Não, jogar agora']
+            }).then((result) => {
+                if (result.response === 0) shell.openExternal('https://github.com/Aeryn-Mintz/Conflict/releases');
+                resolve('skipped');
+            });
+        });
+        
+        autoUpdater.once('update-not-available', () => resolve('none'));
+        autoUpdater.once('error', () => resolve('error'));
+        autoUpdater.checkForUpdates().catch(() => resolve('error'));
     });
-});
-
-autoUpdater.on('update-not-available', () => {
-    if (mainWindow) mainWindow.webContents.send('update-status', { status: 'none' });
-});
-
-autoUpdater.on('download-progress', (progressObj) => {
-    if (mainWindow) mainWindow.webContents.send('update-progress', progressObj.percent);
-});
-
-autoUpdater.on('update-downloaded', () => {
-    if (mainWindow) mainWindow.webContents.send('update-status', { status: 'downloading', msg: 'Reiniciando para instalar...' }); 
-    autoUpdater.quitAndInstall();
 });
 
 app.on('window-all-closed', () => { 
     stopServer(); 
     if (process.platform !== 'darwin') app.quit(); 
-});
-
-// Responde ao Launcher EXATAMENTE o que ocorreu no background
-ipcMain.handle('manual-update-check', async () => {
-    return new Promise((resolve) => {
-        const cleanup = () => {
-            autoUpdater.removeAllListeners('update-not-available');
-            autoUpdater.removeAllListeners('update-available');
-            autoUpdater.removeAllListeners('error');
-        };
-        autoUpdater.once('update-not-available', () => { cleanup(); resolve('clear'); });
-        autoUpdater.once('update-available', () => { cleanup(); resolve('update-found'); });
-        autoUpdater.once('error', () => { cleanup(); resolve('error'); });
-        
-        autoUpdater.checkForUpdates().catch(() => { cleanup(); resolve('error'); });
-    });
 });

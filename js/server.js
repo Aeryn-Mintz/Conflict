@@ -46,7 +46,6 @@ function startLocalServer(baseDir) {
         ws.on('error', (err) => console.error('Client socket error:', err.message));
     });
     
-    // 0.0.0.0 força a liberação da porta para a Internet
     server.listen(8080, '0.0.0.0');
     return { server, wss, lanIp: `${getLocalIp()}:8080` };
 }
@@ -56,7 +55,7 @@ async function startHostTunnel() {
     for (let i = 0; i < 3 && !tunnel; i++) {
         const code = Math.random().toString(36).substring(2, 8);
         try {
-            tunnel = await localtunnel({ port: 8080, subdomain: `conflict-${code}` });
+            tunnel = await localtunnel({ port: 8080, local_host: '127.0.0.1', subdomain: `conflict-${code}` });
             shareCode = code;
         } catch (err) { continue; }
     }

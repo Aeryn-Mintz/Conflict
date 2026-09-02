@@ -17,7 +17,7 @@ document.getElementById('chat-send-btn')?.addEventListener('click', () => {
     if (chatInput) chatInput.value = ''; 
     const name = document.getElementById('display-username')?.textContent || 'You';
     
-    window.addChatLine(name, text); // Render locally instantly
+    window.addChatLine(name, text); 
     if (window.socket && window.socket.readyState === WebSocket.OPEN) {
         window.socket.send(JSON.stringify({ action: 'chat_message', userId: window.myId, username: name, text: text }));
     }
