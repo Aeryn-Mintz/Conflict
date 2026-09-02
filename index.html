@@ -25,7 +25,7 @@
 <body>
     <div id="update-overlay" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(5, 10, 6, 0.9); z-index: 9999; justify-content: center; align-items: center; flex-direction: column; backdrop-filter: blur(5px);">
         <div style="width: 40px; height: 40px; border: 4px solid rgba(255, 255, 255, 0.1); border-top-color: #10b981; border-radius: 50%; animation: spin 1s linear infinite;"></div>
-        <span id="update-msg" style="color: #10b981; margin-top: 15px; font-weight: bold;">Buscando atualizações...</span>
+        <span id="update-msg" style="color: #10b981; margin-top: 15px; font-weight: bold;">Buscando atualizações no servidor...</span>
         <div style="width: 300px; height: 8px; background: rgba(255,255,255,0.1); margin-top: 15px; border-radius: 4px; overflow: hidden;"><div id="update-progress-bar" style="width: 0%; height: 100%; background: #10b981; transition: width 0.2s ease;"></div></div>
     </div>
 
@@ -59,7 +59,7 @@
                 </div>
             </div>
 
-            <div style="background: rgba(0,0,0,0.3); padding: 15px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.05);">
+            <div id="radar-container" style="background: rgba(0,0,0,0.3); padding: 15px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.05);">
                 <p style="color: rgba(255,255,255,0.6); font-size: 12px; margin-top: 0; margin-bottom: 10px; display: flex; justify-content: space-between;">Option 2: Network Radar <span id="radar-spinner" style="display:none; color: #10b981;">Scanning...</span></p>
                 <div id="radar-results" style="display: flex; flex-direction: column; gap: 8px; max-height: 140px; overflow-y: auto;">
                     <span style="color: rgba(255,255,255,0.4); font-size: 12px;">Click scan to find local rooms.</span>
@@ -73,9 +73,15 @@
 
     <script src="js/lang.js"></script>
     <script>
-        const { ipcRenderer } = require('electron');
-        const os = require('os');
-        const net = require('net');
+        // MÁGICA: O try/catch blinda o aplicativo para funcionar perfeitamente em celulares
+        let ipcRenderer = null, os = null, net = null;
+        try {
+            if (typeof require !== 'undefined') {
+                ipcRenderer = require('electron').ipcRenderer;
+                os = require('os');
+                net = require('net');
+            }
+        } catch (e) {}
 
         const mainChoices = document.getElementById('main-choices');
         const hostPanel = document.getElementById('host-panel');
@@ -83,74 +89,69 @@
 
         let hasCheckedForUpdates = false;
 
-        function performActionWithUpdateCheck(actionCallback) {
+        async function performActionWithUpdateCheck(actionCallback) {
             if (ipcRenderer && !hasCheckedForUpdates) {
                 hasCheckedForUpdates = true;
                 const overlay = document.getElementById('update-overlay');
                 const msg = document.getElementById('update-msg');
 
                 if (overlay) overlay.style.display = 'flex';
-                if (msg) msg.innerText = 'Buscando atualizações no GitHub...';
 
-                let resolved = false;
+                let result = 'error';
+                try {
+                    result = await Promise.race([
+                        ipcRenderer.invoke('manual-update-check'),
+                        new Promise(resolve => setTimeout(() => resolve('timeout'), 8000))
+                    ]);
+                } catch (e) {}
 
-                const finishFlow = () => {
-                    if (resolved) return;
-                    resolved = true;
-                    if (overlay) overlay.style.display = 'none';
-                    actionCallback();
-                };
-
-                // Escuta respostas de cancelamento ou não existência de update
-                ipcRenderer.once('update-cancelled', finishFlow);
-                
-                ipcRenderer.on('update-status', (event, data) => {
-                    if (data.status === 'none') {
-                        finishFlow();
-                    } else if (data.status === 'downloading') {
-                        if (msg) msg.innerText = data.msg;
-                    }
-                });
-
-                // Dispara o gatilho sem usar Timeout arbitrário
-                ipcRenderer.invoke('manual-update-check').catch(finishFlow);
-
-                // Failsafe absoluto de 12 segundos apenas para garantir que não trave se a rede cair
-                setTimeout(finishFlow, 12000);
-            } else {
-                actionCallback();
+                if (result === 'downloading') return;
+                if (overlay) overlay.style.display = 'none';
             }
+            actionCallback();
         }
 
-        ipcRenderer.on('update-progress', (event, percent) => { 
-            const bar = document.getElementById('update-progress-bar'); 
-            if (bar) bar.style.width = `${percent}%`; 
-        });
+        if (ipcRenderer) {
+            ipcRenderer.on('update-status', (event, data) => {
+                if (data.status === 'downloading') {
+                    const msg = document.getElementById('update-msg');
+                    if (msg) msg.innerText = data.msg;
+                }
+            });
+
+            ipcRenderer.on('update-progress', (event, percent) => { const bar = document.getElementById('update-progress-bar'); if (bar) bar.style.width = `${percent}%`; });
+
+            ipcRenderer.on('host-started', (event, data) => {
+                document.getElementById('host-status').style.display = 'none'; document.getElementById('invite-section').style.display = 'block';
+                const inviteDisplay = document.getElementById('invite-link-display'); inviteDisplay.innerHTML = ''; 
+                if (data.shareCode) {
+                    localStorage.setItem('conflictShareCode', data.shareCode);
+                    inviteDisplay.innerHTML += `<div style="margin-bottom: 10px;"><span style="color: rgba(255,255,255,0.6); font-size: 11px;">GLOBAL SHARE CODE:</span><br><strong style="font-size: 20px; letter-spacing: 2px; color: #10b981;">${data.shareCode}</strong></div>`;
+                } else { inviteDisplay.innerHTML += `<div style="color: #fbbf24; font-size: 12px; margin-bottom: 10px;">⚠️ Offline Mode Active</div>`; }
+                inviteDisplay.innerHTML += `<div><span style="color: rgba(255,255,255,0.6); font-size: 11px;">LOCAL LAN IP (Offline):</span><br><span style="font-size: 14px; color: #10b981;">${data.lanIp}</span></div>`;
+                localStorage.setItem('conflictServerUrl', 'ws://localhost:8080');
+            });
+
+            ipcRenderer.on('host-failed', (event, errorMsg) => {
+                document.getElementById('host-status').innerText = `Error: ${errorMsg}\nTry restarting the app.`; document.getElementById('host-status').style.color = "#ef4444";
+            });
+        }
 
         document.getElementById('host-game-btn').addEventListener('click', () => {
+            if (!ipcRenderer) return alert("Hosting a server is only available on the Desktop App!");
             performActionWithUpdateCheck(() => { mainChoices.style.display = 'none'; hostPanel.style.display = 'block'; ipcRenderer.send('start-host'); });
-        });
-
-        ipcRenderer.on('host-started', (event, data) => {
-            document.getElementById('host-status').style.display = 'none'; document.getElementById('invite-section').style.display = 'block';
-            const inviteDisplay = document.getElementById('invite-link-display'); inviteDisplay.innerHTML = ''; 
-            if (data.shareCode) {
-                localStorage.setItem('conflictShareCode', data.shareCode);
-                inviteDisplay.innerHTML += `<div style="margin-bottom: 10px;"><span style="color: rgba(255,255,255,0.6); font-size: 11px;">GLOBAL SHARE CODE:</span><br><strong style="font-size: 20px; letter-spacing: 2px; color: #10b981;">${data.shareCode}</strong></div>`;
-            } else { inviteDisplay.innerHTML += `<div style="color: #fbbf24; font-size: 12px; margin-bottom: 10px;">⚠️ Offline Mode Active</div>`; }
-            inviteDisplay.innerHTML += `<div><span style="color: rgba(255,255,255,0.6); font-size: 11px;">LOCAL LAN IP (Offline):</span><br><span style="font-size: 14px; color: #10b981;">${data.lanIp}</span></div>`;
-            localStorage.setItem('conflictServerUrl', 'ws://localhost:8080');
-        });
-
-        ipcRenderer.on('host-failed', (event, errorMsg) => {
-            document.getElementById('host-status').innerText = `Error: ${errorMsg}\nTry restarting the app.`; document.getElementById('host-status').style.color = "#ef4444";
         });
 
         document.getElementById('btn-enter-hosted').addEventListener('click', () => window.location.href = 'app.html');
 
         document.getElementById('join-game-btn').addEventListener('click', () => {
             performActionWithUpdateCheck(() => { mainChoices.style.display = 'none'; joinPanel.style.display = 'block'; });
+            if (!net || !os) {
+                // Esconde a função de Radar no navegador do celular, já que navegadores não escaneiam redes locais
+                document.getElementById('radar-container').style.display = 'none';
+            }
         });
+        
         document.getElementById('btn-back-join').addEventListener('click', () => { joinPanel.style.display = 'none'; mainChoices.style.display = 'block'; });
 
         document.getElementById('btn-connect-join').addEventListener('click', async () => {
@@ -174,13 +175,16 @@
                 } catch (e) { alert("Invalid Invite Link or IP!"); connectBtn.innerText = "Connect"; connectBtn.disabled = false; return; }
             }
 
-            if (httpUrl && httpUrl.includes('loca.lt')) {
-                try { await fetch(httpUrl, { headers: { 'Bypass-Tunnel-Reminder': 'true' } }); } catch (e) {} 
+            if (httpUrl && httpUrl.includes('loca.lt') && ipcRenderer) {
+                try { await fetch(httpUrl, { headers: { 'Bypass-Tunnel-Reminder': 'true', 'User-Agent': 'localtunnel' } }); } catch (e) {} 
             }
-            localStorage.setItem('conflictServerUrl', wsUrl); window.location.href = 'app.html';
+            
+            localStorage.setItem('conflictServerUrl', wsUrl); 
+            window.location.href = 'app.html';
         });
 
         document.getElementById('scan-rooms-btn').addEventListener('click', () => {
+            if (!net || !os) return;
             const resultsDiv = document.getElementById('radar-results'); const spinner = document.getElementById('radar-spinner');
             resultsDiv.innerHTML = ''; spinner.style.display = 'inline-block';
             const subnets = [];

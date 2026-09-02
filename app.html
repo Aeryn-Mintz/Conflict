@@ -8,12 +8,12 @@
 </head>
 <body>
     <div id="update-overlay" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(5, 10, 6, 0.9); z-index: 9999; justify-content: center; align-items: center; flex-direction: column; backdrop-filter: blur(5px);">
-    <div class="update-spinner"></div>
-    <span id="update-msg" style="color: var(--accent-main); margin-top: 15px; font-weight: bold;">Procurando atualizações...</span>
-    <div style="width: 300px; height: 8px; background: rgba(255,255,255,0.1); margin-top: 15px; border-radius: 4px; overflow: hidden;">
-        <div id="update-progress-bar" style="width: 0%; height: 100%; background: var(--accent-main); transition: width 0.2s ease;"></div>
+        <div class="update-spinner"></div>
+        <span id="update-msg" style="color: var(--accent-main); margin-top: 15px; font-weight: bold;">Procurando atualizações...</span>
+        <div style="width: 300px; height: 8px; background: rgba(255,255,255,0.1); margin-top: 15px; border-radius: 4px; overflow: hidden;">
+            <div id="update-progress-bar" style="width: 0%; height: 100%; background: var(--accent-main); transition: width 0.2s ease;"></div>
+        </div>
     </div>
-</div>
     <div class="conflict-app">
         <!-- SIDEBAR -->
         <aside class="sidebar z-high">
@@ -25,6 +25,7 @@
                     <div class="user-info"><span class="username" id="display-username">You</span></div>
                 </div>
                 <button id="settings-btn" class="outline-btn mt-3 w-full kokonut-btn" style="margin-top: 10px; width: 100%;">⚙️ User Settings</button>
+                <button id="connected-users-btn" class="outline-btn mt-2 w-full kokonut-btn" style="margin-top: 8px; width: 100%;">👥 Connected Users</button>
                 <button id="leave-room-btn" class="outline-btn alert-btn mt-2 w-full kokonut-btn" style="margin-top: 8px; width: 100%; color: var(--accent-alert); border-color: var(--accent-alert);">🚪 Leave Room</button>   
             </div>
             <div class="sidebar-section">
@@ -42,9 +43,15 @@
             <div class="tab-container z-high">
                 <button class="tab-btn active kokonut-tab" data-tab="main">Main Stage</button>
                 <button class="tab-btn kokonut-tab" data-tab="rpg">RPG Tabletop</button>
-                <button id="tab-vault-btn" class="tab-btn" data-tab="sheets">Character Vault</button>                <!-- DM ONLY TAB -->
+                <button id="tab-vault-btn" class="tab-btn" data-tab="sheets">Character Vault</button>
                 <button id="tab-dm-btn" class="tab-btn kokonut-tab" data-tab="dm" style="display: none; color: #fbbf24; border-color: #fbbf24;">👑 DM Screen</button>
             </div>
+
+            <!-- FLOATING CONNECTED USERS PANEL -->
+            <section class="panel glass-panel floating-panel" id="connected-users-panel" style="display: none; top: 60px; left: 300px; width: 280px; max-height: 50vh; z-index: 200;">
+                <div class="drag-handle"><h3 id="connected-users-title" style="margin: 0; font-size: 14px;">👥 Connected Users</h3><span class="grip">≡</span></div>
+                <div class="panel-content kokonut-scroll" id="connected-users-list" style="display: flex; flex-direction: column; gap: 8px; padding: 15px;"></div>
+            </section>
 
             <!-- TAB 1: MAIN VIEW -->
             <div id="main-view" class="content-wrapper absolute-layout">
@@ -68,11 +75,16 @@
                 <section class="panel glass-panel floating-panel" id="drag-media" style="top: 80px; right: 30px; width: 380px;">
                     <div class="drag-handle"><h3>Media Player</h3><span class="grip">≡</span></div>
                     <div class="panel-content">
-                        <div style="display: flex; gap: 8px; margin-bottom: 10px;">
+                        <!-- YOUTUBE VOLUME ADICIONADO AQUI -->
+                        <div style="display: flex; gap: 8px; margin-bottom: 10px; align-items: center;">
                             <button id="yt-playpause-btn" class="icon-btn kokonut-btn">⏯️</button>
                             <button id="yt-skip-btn" class="icon-btn kokonut-btn">⏭️</button>
                             <button id="toggle-queue-btn" class="icon-btn kokonut-btn">📜 Queue</button>
                             <button id="toggle-yt-view" class="icon-btn kokonut-btn">👁️</button>
+                            <div style="display: flex; align-items: center; gap: 5px; margin-left: auto;">
+                                <span style="font-size: 14px;">🔊</span>
+                                <input type="range" id="yt-volume-slider" class="kokonut-slider" min="0" max="100" value="100" style="width: 80px;" title="YouTube Volume">
+                            </div>
                         </div>
                         <div class="bot-search-row" style="display: flex; gap: 10px;">
                             <input type="text" id="yt-url-input" class="kokonut-input" placeholder="YouTube Link..." style="flex-grow: 1;">
@@ -101,7 +113,10 @@
 
             <!-- TAB 2: RPG TABLETOP VIEW -->
             <div id="rpg-view" class="content-wrapper" style="display: none; position: relative;">
-                <div class="panel glass-panel z-high kokonut-toolbar" style="display: flex; justify-content: space-between; align-items: center; padding: 10px 20px; flex-wrap: wrap; gap: 10px;">
+                
+                <button id="expand-vtt-toolbar-btn" class="panel glass-panel secondary-btn kokonut-btn" style="display: none; position: absolute; top: 10px; left: 50%; transform: translateX(-50%); z-index: 100; padding: 6px 16px; font-size: 12px; font-weight: bold;">🔽 Show Toolbar</button>
+                
+                <div id="vtt-main-toolbar" class="panel glass-panel z-high kokonut-toolbar" style="display: flex; justify-content: space-between; align-items: center; padding: 10px 20px; flex-wrap: wrap; gap: 10px; transition: transform 0.3s ease, opacity 0.3s ease;">
                     <div style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
                         <button id="toggle-tokens-btn" class="secondary-btn kokonut-btn">🎒 Assets</button>
                         <div style="width: 1px; height: 20px; background: var(--border-color);"></div>
@@ -115,11 +130,11 @@
                     <div class="dm-tools" style="display: flex; gap: 8px; align-items: center; border-left: 1px solid var(--border-color); padding-left: 15px;">
                         <button id="claim-dm-btn" class="outline-btn kokonut-btn dm-btn" style="border-color: #fbbf24; color: #fbbf24;">👑 Claim DM</button>
                         <div id="dm-controls" style="display: none; gap: 8px;">
-                            <button id="toggle-fog-btn" class="secondary-btn kokonut-btn">🌫️ Fog</button>
                             <button id="restore-map-btn" class="outline-btn kokonut-btn" style="display: none;">↺ Last Map</button>
                             <button id="map-upload-btn" class="secondary-btn kokonut-btn">🗺️ Set Map</button>
                             <input type="file" id="map-file-input" accept="image/*" style="display: none;">
                         </div>
+                        <button id="collapse-vtt-toolbar-btn" class="icon-btn" title="Collapse Toolbar" style="margin-left: 10px;">🔼</button>
                     </div>
                 </div>
 
@@ -138,23 +153,19 @@
                             <div class="css-grid-bg" style="width: 100%; height: 100%; z-index: 2;"></div>
                             <canvas id="shared-canvas" style="position: absolute; top: 0; left: 0; z-index: 3;"></canvas>
                             <div id="token-layer" style="position: absolute; top: 0; left: 0; right: 0; bottom: 0; pointer-events: none; z-index: 6;"></div>
-                            <canvas id="fog-canvas" style="position: absolute; top: 0; left: 0; z-index: 5; pointer-events: none; opacity: 1.0;"></canvas>
                         </div>
                     </div>
                     
-                    <!-- DICE LAYER OVERLAY: Moved outside the map so it stays perfectly centered on your screen! -->
                     <div id="dice-layer" style="position: absolute; top: 0; left: 0; right: 0; bottom: 0; pointer-events: none; z-index: 20;"></div>
                     
                    <div class="canvas-tools glass-panel floating-tools" style="z-index: 25; position: absolute; bottom: 15px; left: 50%; transform: translateX(-50%); display: flex; align-items: center; gap: 8px;">
-    <!-- Novo Botão de Seletor como Padrão -->
-    <button id="selector-tool" class="tool-btn active kokonut-btn" title="Selector">👆</button>
-    <button id="pen-tool" class="tool-btn kokonut-btn" title="Draw">🖊️</button>
-    <button id="fog-brush-tool" class="tool-btn kokonut-btn" style="display: none;" title="Fog Brush">🔦</button>
-    <button id="eraser-tool" class="tool-btn kokonut-btn" title="Eraser">🧽</button>
-    <button id="clear-canvas-btn" class="tool-btn kokonut-btn alert-text" title="Clear Canvas">🗑️</button>
-    <input type="color" id="stroke-color" value="#10b981" class="color-dot" title="Ink Color">
-    <input type="range" id="stroke-width" min="1" max="50" value="2" class="kokonut-slider" style="width: 80px;" title="Brush Size">
-</div>
+                        <button id="selector-tool" class="tool-btn active kokonut-btn" title="Selector">👆</button>
+                        <button id="pen-tool" class="tool-btn kokonut-btn" title="Draw">🖊️</button>
+                        <button id="eraser-tool" class="tool-btn kokonut-btn" title="Eraser">🧽</button>
+                        <button id="clear-canvas-btn" class="tool-btn kokonut-btn alert-text" title="Clear Canvas">🗑️</button>
+                        <input type="color" id="stroke-color" value="#10b981" class="color-dot" title="Ink Color">
+                        <input type="range" id="stroke-width" min="1" max="50" value="2" class="kokonut-slider" style="width: 80px;" title="Brush Size">
+                    </div>
                 </div>
             </div> 
 
@@ -162,27 +173,24 @@
             <div id="sheets-view" class="content-wrapper" style="display: none; height: 100%; flex-direction: column; overflow: hidden;">
                 <div class="panel glass-panel" style="display: flex; justify-content: space-between; align-items: center; padding: 15px 20px; flex-shrink: 0; flex-wrap: wrap; gap: 10px;">
                     <div style="display: flex; align-items: center; gap: 10px;">
-                    <h2 id="char-vault-title">Character Vault</h2>      
-                  <span id="campaign-system-badge" class="kokonut-card" style="font-size: 11px; padding: 4px 10px; border-radius: 20px; border: 1px solid var(--border-color); color: var(--accent-main); font-weight: bold;">System: D&D 5e</span>
+                        <h2 id="char-vault-title">Character Vault</h2>      
+                        <span id="campaign-system-badge" class="kokonut-card" style="font-size: 11px; padding: 4px 10px; border-radius: 20px; border: 1px solid var(--border-color); color: var(--accent-main); font-weight: bold;">System: D&D 5e</span>
                     </div>
                     <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
                         <span id="sheet-save-status" style="color: var(--accent-main); font-size: 11px; font-weight: bold; opacity: 0; transition: opacity 0.3s;">✓ Auto-Saved</span>
                         <div class="sheet-divider" style="width: 1px; height: 20px; background: var(--border-color);"></div>
-                      <!-- Cole esta linha exatamente ACIMA do <select id="character-roster" -->
-<button id="view-party-btn" class="outline-btn kokonut-btn" style="padding: 6px 12px; font-size: 12px; color: var(--accent-main); border-color: var(--accent-main);">👁️ Party Sheets</button>
+                        <button id="view-party-btn" class="outline-btn kokonut-btn" style="padding: 6px 12px; font-size: 12px; color: var(--accent-main); border-color: var(--accent-main);">👁️ Party Sheets</button>
                         <select id="character-roster" class="config-select" style="width: 150px;"></select>
                         <button id="new-char-btn" class="secondary-btn kokonut-btn" style="padding: 6px 12px; font-size: 12px;">+ New Character</button>
                     </div>
                 </div>
                 
                 <div style="display: flex; gap: 15px; flex-grow: 1; overflow: hidden; margin-top: 5px;">
-                    <!-- Character Portrait Sidebar -->
                     <div class="panel glass-panel" style="width: 160px; display: flex; flex-direction: column; align-items: center; padding: 20px; flex-shrink: 0;">
                         <h4 style="margin: 0 0 15px 0; font-size: 12px; color: var(--text-muted); text-transform: uppercase;">Portrait</h4>
                         <img id="char-portrait-img" src="./Banaya.png" style="width: 120px; height: 120px; border-radius: 50%; object-fit: cover; border: 2px solid var(--accent-main); cursor: pointer; transition: transform 0.2s;" title="Click to upload portrait">
                         <button id="spawn-char-token-btn" class="primary-btn kokonut-btn glow-btn" style="margin-top: 20px; width: 100%; font-size: 11px; padding: 8px;">Spawn Token</button>
                     </div>
-                    <!-- The Sheet Itself -->
                     <div id="dynamic-sheet-container" class="panel glass-panel kokonut-scroll" style="flex-grow: 1; display: flex; flex-direction: column; overflow-y: auto; padding: 20px;"></div>
                 </div>
             </div>
@@ -193,7 +201,6 @@
                     <h3 style="color: #fbbf24; margin-top: 0;">👑 DM Command Center</h3>
                     <div style="display: flex; gap: 20px; flex-grow: 1; margin-top: 15px; overflow: hidden;">
                         
-                        <!-- Left: Party Viewer -->
                         <div style="flex: 1; border-right: 1px solid var(--border-color); padding-right: 20px; display: flex; flex-direction: column;">
                             <h4 style="color: var(--text-muted); margin-top: 0;">Live Party Sheets</h4>
                             <div id="party-list-grid" class="kokonut-scroll button-grid" style="overflow-y: auto; flex-grow: 1; display: flex; flex-direction: column; gap: 10px;">
@@ -201,7 +208,6 @@
                             </div>
                         </div>
 
-                        <!-- Right: NPC Manager -->
                         <div style="flex: 1; padding-left: 20px; display: flex; flex-direction: column;">
                             <div style="display: flex; justify-content: space-between; align-items: center;">
                                 <h4 style="color: var(--text-muted); margin-top: 0;">NPC Stat Blocks</h4>
@@ -215,7 +221,7 @@
                 </div>
             </div>
 
-            <!-- SETTINGS MODAL VIEW (Compact & Wide) -->
+            <!-- SETTINGS MODAL VIEW -->
             <div id="config-view" class="panel glass-panel floating-panel" style="display: none; position: absolute; z-index: 100; top: 10%; left: 50%; width: 750px; max-height: 85vh;">
                 <div class="drag-handle">
                     <h3 style="margin: 0; display: flex; align-items: center; gap: 10px;"><img src="./conflict-logo.png" class="brand-icon-img" style="width: 24px; height: 24px;"> Settings</h3>
@@ -224,7 +230,6 @@
                 <div class="panel-content" style="display: flex; flex-direction: column; gap: 15px;">
                     
                     <div style="display: flex; gap: 25px;">
-                        <!-- LEFT COLUMN: Profile & Themes -->
                         <div style="flex: 1; display: flex; flex-direction: column; gap: 15px;">
                             <div class="config-group">
                                 <label class="config-label" style="font-size: 13px; color: var(--text-muted);">Display Name:</label>
@@ -248,7 +253,6 @@
                             </div>
                         </div>
 
-                        <!-- RIGHT COLUMN: Hardware Devices -->
                         <div style="flex: 1; display: flex; flex-direction: column; gap: 12px; border-left: 1px solid var(--border-color); padding-left: 25px;">
                             <h3 style="margin-top: 0; margin-bottom: 5px; font-size: 15px;">Hardware Settings</h3>
                             
@@ -271,19 +275,24 @@
                         </div>
                     </div>
                     <div class="setting-item" style="margin-bottom: 15px;">
-    <label id="lang-label" style="display:block; margin-bottom:5px; color:var(--text-muted); font-size:12px;">Language / Idioma</label>
-    <select id="language-select" style="width: 100%; padding: 8px; background: rgba(0,0,0,0.5); border: 1px solid var(--border-color); color: var(--text-main); border-radius: 4px; font-size: 14px;">
-        <option value="en">🇺🇸 English</option>
-        <option value="pt-br">🇧🇷 Português (Brasil)</option>
-    </select>
-</div>
+                        <label id="lang-label" style="display:block; margin-bottom:5px; color:var(--text-muted); font-size:12px;">Language / Idioma</label>
+                        <select id="language-select" style="width: 100%; padding: 8px; background: rgba(0,0,0,0.5); border: 1px solid var(--border-color); color: var(--text-main); border-radius: 4px; font-size: 14px;">
+                            <option value="en">🇺🇸 English</option>
+                            <option value="pt-br">🇧🇷 Português (Brasil)</option>
+                        </select>
+                    </div>
 
-                    <!-- BOTTOM FULL-WIDTH: Save Button -->
                     <div class="config-group" style="border-top: 1px solid var(--border-color); padding-top: 15px;">
                         <button id="save-theme-btn" class="primary-btn kokonut-btn glow-btn" style="width: 100%; font-size: 15px; padding: 10px;">Save & Return</button>
                     </div>
                 </div>
             </div>
+
+    <!-- USER VOLUME CONTEXT MENU (NOVO) -->
+    <div id="user-volume-context-menu" class="panel glass-panel" style="display: none; position: fixed; flex-direction: column; gap: 8px; z-index: 99999; padding: 15px; min-width: 150px; align-items: center;">
+        <span style="font-size: 12px; font-weight: bold; color: var(--text-muted);" id="uv-name">User Volume</span>
+        <input type="range" id="uv-slider" class="kokonut-slider" min="0" max="1" step="0.05" value="0.8" style="width: 100%;">
+    </div>
 
     <!-- UTILITIES & MODALS -->
     <input type="file" id="avatar-upload" accept="image/png, image/jpeg, image/gif" style="display: none;">
@@ -294,21 +303,19 @@
         <button id="cancel-screen-picker" class="outline-btn kokonut-btn" style="margin-top: 20px; width: 100%;">Cancel</button>
     </div>
 
-    <!-- PROFILE PICTURE CROPPER MODAL -->
     <div id="crop-modal-overlay" style="display: none; position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(0,0,0,0.8); z-index: 200; backdrop-filter: blur(6px);"></div>
     <div id="crop-modal" class="panel glass-panel" style="display: none; position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); z-index: 201; width: 360px; flex-direction: column; align-items: center; padding: 25px;">
         <h3 style="margin-top: 0; margin-bottom: 15px;">Position Image</h3>
         <div id="crop-viewport" style="position: relative; width: 200px; height: 200px; border-radius: 50%; overflow: hidden; border: 3px solid var(--accent-main); cursor: grab; background: #000; box-shadow: 0 0 20px rgba(0,0,0,0.8);">
             <img id="crop-image-target" src="" style="position: absolute; cursor: grab; user-select: none; max-width: none;" draggable="false">
         </div>
-        <!-- Scripts -->
-<div style="display: flex; gap: 10px; width: 100%;">
+        <div style="display: flex; gap: 10px; width: 100%;">
             <button id="cancel-crop-btn" class="outline-btn kokonut-btn" style="flex: 1;">Cancel</button>
             <button id="save-crop-btn" class="primary-btn kokonut-btn glow-btn" style="flex: 1;">Apply Crop</button>
         </div>
     </div>
 
-<script src="https://cdnjs.cloudflare.com/ajax/libs/animejs/3.2.1/anime.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/animejs/3.2.1/anime.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
     <script src="js/lang.js"></script>
     <script src="js/core.js"></script>
