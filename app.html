@@ -24,6 +24,8 @@
                     <div class="avatar-wrapper"><img src="./Banaya.png" id="user-avatar" class="avatar" alt="Avatar"></div>
                     <div class="user-info"><span class="username" id="display-username">You</span></div>
                 </div>
+                
+
                 <button id="settings-btn" class="outline-btn mt-3 w-full kokonut-btn" style="margin-top: 10px; width: 100%;">⚙️ User Settings</button>
                 <button id="connected-users-btn" class="outline-btn mt-2 w-full kokonut-btn" style="margin-top: 8px; width: 100%;">👥 Connected Users</button>
                 <button id="leave-room-btn" class="outline-btn alert-btn mt-2 w-full kokonut-btn" style="margin-top: 8px; width: 100%; color: var(--accent-alert); border-color: var(--accent-alert);">🚪 Leave Room</button>   
@@ -55,6 +57,7 @@
 
             <!-- TAB 1: MAIN VIEW -->
             <div id="main-view" class="content-wrapper absolute-layout">
+                
                 <section class="panel glass-panel floating-panel" id="video-grid" style="top: 20px; left: 20px; width: 55%; height: 60vh; min-width: 400px; min-height: 350px;">
                     <div class="drag-handle"><h3 style="margin: 0;">Live Stage</h3><span class="grip">≡</span></div>
                     <div class="panel-content" style="display: flex; flex-direction: column;">
@@ -72,30 +75,51 @@
                     </div>
                 </section>
 
+                <!-- PAINEL 1: O MEDIA PLAYER LIMPO -->
                 <section class="panel glass-panel floating-panel" id="drag-media" style="top: 80px; right: 30px; width: 380px;">
                     <div class="drag-handle"><h3>Media Player</h3><span class="grip">≡</span></div>
                     <div class="panel-content">
-                        <!-- YOUTUBE VOLUME ADICIONADO AQUI -->
+                        
                         <div style="display: flex; gap: 8px; margin-bottom: 10px; align-items: center;">
-                            <button id="yt-playpause-btn" class="icon-btn kokonut-btn">⏯️</button>
-                            <button id="yt-skip-btn" class="icon-btn kokonut-btn">⏭️</button>
-                            <button id="toggle-queue-btn" class="icon-btn kokonut-btn">📜 Queue</button>
-                            <button id="toggle-yt-view" class="icon-btn kokonut-btn">👁️</button>
-                            <div style="display: flex; align-items: center; gap: 5px; margin-left: auto;">
+                            <button id="yt-playpause-btn" class="icon-btn kokonut-btn" title="Play/Pause">⏯️</button>
+                            <button id="yt-skip-btn" class="icon-btn kokonut-btn" title="Skip Video">⏭️</button>
+                            <button id="toggle-queue-btn" class="icon-btn kokonut-btn" title="Open Queue">📜 Queue</button>
+                            <button id="toggle-yt-view" class="icon-btn kokonut-btn" title="Hide/Show Video">👁️</button>
+                            
+                            <div style="display: flex; align-items: center; gap: 5px; margin-left: auto; background: rgba(0,0,0,0.3); padding: 4px 8px; border-radius: 6px;">
                                 <span style="font-size: 14px;">🔊</span>
-                                <input type="range" id="yt-volume-slider" class="kokonut-slider" min="0" max="100" value="100" style="width: 80px;" title="YouTube Volume">
+                                <input type="range" id="yt-volume-slider" class="kokonut-slider" min="0" max="100" value="100" style="width: 70px;" title="YouTube Volume">
                             </div>
                         </div>
-                        <div class="bot-search-row" style="display: flex; gap: 10px;">
-                            <input type="text" id="yt-url-input" class="kokonut-input" placeholder="YouTube Link..." style="flex-grow: 1;">
-                            <button id="yt-queue-add-btn" class="secondary-btn kokonut-btn">+Q</button>
-                            <button id="yt-play-btn" class="primary-btn kokonut-btn">Play</button>
+                        
+                        <div style="display: flex; gap: 8px; margin-bottom: 10px;">
+                            <input type="text" id="yt-url-input" class="kokonut-input" placeholder="Paste YouTube Link..." style="flex-grow: 1;">
+                            <button id="yt-play-btn" class="primary-btn kokonut-btn glow-btn" title="Play Now">▶️ Play</button>
+                            <button id="yt-queue-add-btn" class="secondary-btn kokonut-btn" title="Add to Queue">➕</button>
                         </div>
-                        <div id="yt-queue-drawer" class="yt-queue-container" style="display: none; flex-direction: column; margin-top: 10px;">
-                            <div class="queue-header" style="display: flex; justify-content: space-between; font-size: 11px; text-transform: uppercase; color: var(--text-muted); border-bottom: 1px solid var(--border-color); padding: 6px 12px;"><span>Up Next Queue</span><span id="queue-count">0 items</span></div>
-                            <div id="yt-queue-list"></div>
+
+                        <div id="yt-wrapper" style="display: none; width: 100%; height: 215px; border-radius: 8px; overflow: hidden; background: #000;">
+                            <div id="yt-iframe"></div>
                         </div>
-                        <div id="yt-wrapper" style="display: none; flex-grow: 1; margin-top: 15px;"><div id="yt-iframe"></div></div>
+                    </div>
+                </section>
+
+                <!-- PAINEL 2: A FILA (QUEUE) INDEPENDENTE -->
+                <section class="panel glass-panel floating-panel" id="drag-yt-queue" style="display: none; top: 150px; right: 420px; width: 320px; z-index: 150;">
+                    <div class="drag-handle"><h3 style="margin: 0; font-size: 15px;">Playlist Queue</h3><span class="grip">≡</span></div>
+                    <div class="panel-content">
+                        <div class="playlist-toolbar" style="display:flex; gap:5px; padding-bottom: 8px; border-bottom: 1px solid var(--border-color); margin-bottom: 10px;">
+                            <button id="save-pl-btn" class="secondary-btn kokonut-btn" onclick="window.saveYtPlaylist()" style="flex:1; font-size:11px; padding:6px;">💾 Save</button>
+                            <button id="load-pl-btn" class="secondary-btn kokonut-btn" onclick="window.loadYtPlaylist()" style="flex:1; font-size:11px; padding:6px;">📂 Load</button>
+                            <button id="restore-pl-btn" class="outline-btn kokonut-btn" onclick="window.loadRecentQueue()" style="flex:1; font-size:11px; padding:6px;">🔄 Last</button>
+                        </div>
+                        
+                        <div class="yt-queue-header" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                            <span style="font-size: 11px; color: var(--text-muted); font-weight: bold;">UP NEXT QUEUE</span>
+                            <span id="queue-count" style="font-size: 11px; color: var(--text-muted);">0 items</span>
+                        </div>
+                        
+                        <div id="yt-queue-list" class="yt-queue-list kokonut-scroll" style="max-height: 250px; overflow-y: auto; display: flex; flex-direction: column; gap: 4px;"></div>
                     </div>
                 </section>
 
@@ -232,6 +256,12 @@
                     <div style="display: flex; gap: 25px;">
                         <div style="flex: 1; display: flex; flex-direction: column; gap: 15px;">
                             <div class="config-group">
+                                <div class="config-group" style="border-top: 1px solid var(--border-color); padding-top: 15px; margin-top: 15px;">
+                                <label style="display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--text-main); cursor: pointer;">
+                                    <input type="checkbox" id="startup-toggle" style="width: 16px; height: 16px; accent-color: var(--accent-main);">
+                                    Launch Conflict automatically on system startup
+                                </label>
+                            </div>
                                 <label class="config-label" style="font-size: 13px; color: var(--text-muted);">Display Name:</label>
                                 <input type="text" id="username-input" class="config-input kokonut-input" placeholder="Enter your name..." style="width: 100%; margin-top: 5px;">
                                 

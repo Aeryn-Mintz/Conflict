@@ -18,11 +18,16 @@
         .hidden-panel { display: none; margin-top: 25px; padding-top: 25px; border-top: 1px solid rgba(255,255,255,0.1); animation: fadeIn 0.3s ease; }
         @keyframes fadeIn { from { opacity: 0; transform: translateY(-10px); } to { opacity: 1; transform: translateY(0); } }
         @keyframes spin { 100% { transform: rotate(360deg); } }
-        .invite-box { background: rgba(0,0,0,0.4); padding: 12px; border-radius: 8px; font-family: monospace; color: #10b981; margin-bottom: 15px; border: 1px dashed rgba(16, 185, 129, 0.5); word-break: break-all; user-select: text; }
+        .invite-box { background: rgba(0,0,0,0.4); padding: 12px; border-radius: 8px; font-family: monospace; color: #10b981; margin-bottom: 15px; border: 1px dashed rgba(16, 185, 129, 0.5); cursor: pointer; transition: 0.2s; }
+        .invite-box:hover { background: rgba(16, 185, 129, 0.2); }
         input { padding: 10px; border-radius: 6px; border: 1px solid rgba(255,255,255,0.2); background: rgba(0,0,0,0.5); color: #fff; }
     </style>
 </head>
 <body>
+    <div id="index-lang-flags" style="position: absolute; top: 20px; right: 20px; display: flex; gap: 15px; z-index: 100;">
+        <img src="https://flagcdn.com/w40/gb.png" alt="English" id="flag-en" class="lang-flag" style="width: 32px; height: 24px; cursor: pointer; border-radius: 4px; border: 2px solid transparent; transition: all 0.2s ease; object-fit: cover;">
+        <img src="https://flagcdn.com/w40/br.png" alt="Português" id="flag-pt-br" class="lang-flag" style="width: 32px; height: 24px; cursor: pointer; border-radius: 4px; border: 2px solid transparent; transition: all 0.2s ease; object-fit: cover;">
+    </div>
     <div id="update-overlay" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(5, 10, 6, 0.9); z-index: 9999; justify-content: center; align-items: center; flex-direction: column; backdrop-filter: blur(5px);">
         <div style="width: 40px; height: 40px; border: 4px solid rgba(255, 255, 255, 0.1); border-top-color: #10b981; border-radius: 50%; animation: spin 1s linear infinite;"></div>
         <span id="update-msg" style="color: #10b981; margin-top: 15px; font-weight: bold;">Buscando atualizações no servidor...</span>
@@ -42,19 +47,20 @@
             <h3 style="margin-top: 0; margin-bottom: 10px;">Starting Secure Server...</h3>
             <p id="host-status" style="color: rgba(255,255,255,0.6); font-size: 13px;">Spinning up local tunnel, please wait...</p>
             <div id="invite-section" style="display: none;">
-                <p style="font-size: 13px; margin-bottom: 5px;">Share this Invite Link with friends:</p>
-                <div class="invite-box" id="invite-link-display">Loading...</div>
+                <p style="font-size: 13px; margin-bottom: 5px;">Click the IP below to copy and send to your friends:</p>
+                <div class="invite-box" id="invite-link-display" title="Click to copy IP">Loading...</div>
                 <button id="btn-enter-hosted" class="primary-btn choice-btn" style="margin-top: 10px;">Enter Room</button>
+                <p style="font-size: 11px; color: rgba(255,255,255,0.4); margin-top: 10px;">📡 Radar Beacon Active</p>
             </div>
         </div>
 
         <div id="join-panel" class="hidden-panel">
-            <h3 style="margin-top: 0; margin-bottom: 15px;">Join an Existing Room</h3>
+            <h3 style="margin-top: 0; margin-bottom: 15px;">Join a Room</h3>
             
             <div style="background: rgba(0,0,0,0.3); padding: 15px; border-radius: 8px; margin-bottom: 15px; border: 1px solid rgba(255,255,255,0.05);">
-                <p style="color: rgba(255,255,255,0.6); font-size: 12px; margin-top: 0; margin-bottom: 10px; text-align: left;">Option 1: Code or IP</p>
+                <p style="color: rgba(255,255,255,0.6); font-size: 12px; margin-top: 0; margin-bottom: 10px; text-align: left;">Option 1: Direct Connect</p>
                 <div style="display: flex; gap: 8px;">
-                    <input type="text" id="invite-input" placeholder="e.g. 26.x.x.x or code" style="flex-grow: 1; box-sizing: border-box; text-align: center;">
+                    <input type="text" id="invite-input" placeholder="Paste Host's Radmin IP..." style="flex-grow: 1; box-sizing: border-box; text-align: center; font-size: 12px;">
                     <button id="btn-connect-join" class="primary-btn choice-btn" style="width: auto; margin-bottom: 0; padding: 10px 20px;">Connect</button>
                 </div>
             </div>
@@ -73,151 +79,76 @@
 
     <script src="js/lang.js"></script>
     <script>
-        // MÁGICA: O try/catch blinda o aplicativo para funcionar perfeitamente em celulares
-        let ipcRenderer = null, os = null, net = null;
-        try {
-            if (typeof require !== 'undefined') {
-                ipcRenderer = require('electron').ipcRenderer;
-                os = require('os');
-                net = require('net');
-            }
-        } catch (e) {}
+        // Apply Global Vibe to Launcher
+        const savedBg = localStorage.getItem('themeBg');
+        const savedPanel = localStorage.getItem('themePanel');
+        const savedText = localStorage.getItem('themeText');
+        const savedAccent = localStorage.getItem('themeAccent');
+
+        if (savedBg) document.documentElement.style.setProperty('--bg-base', savedBg);
+        if (savedText) document.documentElement.style.setProperty('--text-main', savedText);
+        if (savedAccent) document.documentElement.style.setProperty('--accent-main', savedAccent);
+        if (savedPanel) {
+            let pr = parseInt(savedPanel.slice(1, 3), 16), pg = parseInt(savedPanel.slice(3, 5), 16), pb = parseInt(savedPanel.slice(5, 7), 16);
+            document.documentElement.style.setProperty('--panel-bg', `rgba(${pr || 10}, ${pg || 20}, ${pb || 12}, 0.75)`);
+        }
+        let ipcRenderer = null;
+        try { if (typeof require !== 'undefined') ipcRenderer = require('electron').ipcRenderer; } catch (e) {}
 
         const mainChoices = document.getElementById('main-choices');
         const hostPanel = document.getElementById('host-panel');
         const joinPanel = document.getElementById('join-panel');
 
-        let hasCheckedForUpdates = false;
-
-        async function performActionWithUpdateCheck(actionCallback) {
-            if (ipcRenderer && !hasCheckedForUpdates) {
-                hasCheckedForUpdates = true;
-                const overlay = document.getElementById('update-overlay');
-                const msg = document.getElementById('update-msg');
-
-                if (overlay) overlay.style.display = 'flex';
-
-                let result = 'error';
-                try {
-                    result = await Promise.race([
-                        ipcRenderer.invoke('manual-update-check'),
-                        new Promise(resolve => setTimeout(() => resolve('timeout'), 8000))
-                    ]);
-                } catch (e) {}
-
-                if (result === 'downloading') return;
-                if (overlay) overlay.style.display = 'none';
-            }
-            actionCallback();
-        }
+        // Hide the radar since it relies on physical IPs
+        document.getElementById('radar-container').style.display = 'none';
+        document.getElementById('invite-input').placeholder = "Enter 6-Letter Room Code...";
 
         if (ipcRenderer) {
-            ipcRenderer.on('update-status', (event, data) => {
-                if (data.status === 'downloading') {
-                    const msg = document.getElementById('update-msg');
-                    if (msg) msg.innerText = data.msg;
-                }
-            });
-
-            ipcRenderer.on('update-progress', (event, percent) => { const bar = document.getElementById('update-progress-bar'); if (bar) bar.style.width = `${percent}%`; });
-
             ipcRenderer.on('host-started', (event, data) => {
-                document.getElementById('host-status').style.display = 'none'; document.getElementById('invite-section').style.display = 'block';
-                const inviteDisplay = document.getElementById('invite-link-display'); inviteDisplay.innerHTML = ''; 
-                if (data.shareCode) {
-                    localStorage.setItem('conflictShareCode', data.shareCode);
-                    inviteDisplay.innerHTML += `<div style="margin-bottom: 10px;"><span style="color: rgba(255,255,255,0.6); font-size: 11px;">GLOBAL SHARE CODE:</span><br><strong style="font-size: 20px; letter-spacing: 2px; color: #10b981;">${data.shareCode}</strong></div>`;
-                } else { inviteDisplay.innerHTML += `<div style="color: #fbbf24; font-size: 12px; margin-bottom: 10px;">⚠️ Offline Mode Active</div>`; }
-                inviteDisplay.innerHTML += `<div><span style="color: rgba(255,255,255,0.6); font-size: 11px;">LOCAL LAN IP (Offline):</span><br><span style="font-size: 14px; color: #10b981;">${data.lanIp}</span></div>`;
-                localStorage.setItem('conflictServerUrl', 'ws://localhost:8080');
+                document.getElementById('host-status').style.display = 'none'; 
+                document.getElementById('invite-section').style.display = 'block';
+                localStorage.setItem('conflictServerUrl', 'ws://localhost:8080'); // Connect to local bridge
+                
+                const inviteDisplay = document.getElementById('invite-link-display');
+                inviteDisplay.innerHTML = `<span style="font-size: 24px; font-weight: bold; letter-spacing: 3px;">${data.roomCode}</span>`;
+                inviteDisplay.onclick = () => {
+                    navigator.clipboard.writeText(data.roomCode);
+                    const originalHTML = inviteDisplay.innerHTML;
+                    inviteDisplay.innerHTML = `<span style="font-size: 14px; font-weight: bold;">Code Copied!</span>`;
+                    setTimeout(() => { inviteDisplay.innerHTML = originalHTML; }, 2000);
+                };
             });
 
-            ipcRenderer.on('host-failed', (event, errorMsg) => {
-                document.getElementById('host-status').innerText = `Error: ${errorMsg}\nTry restarting the app.`; document.getElementById('host-status').style.color = "#ef4444";
+            ipcRenderer.on('room-joined', () => {
+                localStorage.setItem('conflictServerUrl', 'ws://localhost:8080'); // Connect to local bridge
+                window.location.href = 'app.html';
             });
         }
 
         document.getElementById('host-game-btn').addEventListener('click', () => {
-            if (!ipcRenderer) return alert("Hosting a server is only available on the Desktop App!");
-            performActionWithUpdateCheck(() => { mainChoices.style.display = 'none'; hostPanel.style.display = 'block'; ipcRenderer.send('start-host'); });
+            if (!ipcRenderer) return alert("Hosting is only available on the Desktop App!");
+            mainChoices.style.display = 'none'; hostPanel.style.display = 'block'; 
+            ipcRenderer.send('start-host'); 
         });
 
         document.getElementById('btn-enter-hosted').addEventListener('click', () => window.location.href = 'app.html');
 
         document.getElementById('join-game-btn').addEventListener('click', () => {
-            performActionWithUpdateCheck(() => { mainChoices.style.display = 'none'; joinPanel.style.display = 'block'; });
-            if (!net || !os) {
-                // Esconde a função de Radar no navegador do celular, já que navegadores não escaneiam redes locais
-                document.getElementById('radar-container').style.display = 'none';
-            }
+            mainChoices.style.display = 'none'; joinPanel.style.display = 'block';
         });
         
-        document.getElementById('btn-back-join').addEventListener('click', () => { joinPanel.style.display = 'none'; mainChoices.style.display = 'block'; });
-
-        document.getElementById('btn-connect-join').addEventListener('click', async () => {
-            const input = document.getElementById('invite-input').value.trim();
-            if (!input) return;
-            
-            const connectBtn = document.getElementById('btn-connect-join');
-            connectBtn.innerText = "Connecting..."; connectBtn.disabled = true;
-
-            let wsUrl; let httpUrl;
-            const cleaned = input.toLowerCase().replace(/[^a-z0-9.]/g, '');
-            
-            if (input.match(/^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}(:\d+)?$/)) {
-                const ip = input.includes(':') ? input : `${input}:8080`; wsUrl = `ws://${ip}`;
-            } else if (/^[a-z0-9]{6}$/.test(cleaned)) {
-                httpUrl = `https://conflict-${cleaned}.loca.lt`; wsUrl = `wss://conflict-${cleaned}.loca.lt`;
-            } else {
-                try {
-                    const url = new URL(input.startsWith('http') ? input : `https://${input}`);
-                    httpUrl = url.toString(); wsUrl = url.toString().replace(/^http/, 'ws');
-                } catch (e) { alert("Invalid Invite Link or IP!"); connectBtn.innerText = "Connect"; connectBtn.disabled = false; return; }
-            }
-
-            if (httpUrl && httpUrl.includes('loca.lt') && ipcRenderer) {
-                try { await fetch(httpUrl, { headers: { 'Bypass-Tunnel-Reminder': 'true', 'User-Agent': 'localtunnel' } }); } catch (e) {} 
-            }
-            
-            localStorage.setItem('conflictServerUrl', wsUrl); 
-            window.location.href = 'app.html';
+        document.getElementById('btn-back-join').addEventListener('click', () => { 
+            joinPanel.style.display = 'none'; mainChoices.style.display = 'block'; 
         });
 
-        document.getElementById('scan-rooms-btn').addEventListener('click', () => {
-            if (!net || !os) return;
-            const resultsDiv = document.getElementById('radar-results'); const spinner = document.getElementById('radar-spinner');
-            resultsDiv.innerHTML = ''; spinner.style.display = 'inline-block';
-            const subnets = [];
-            for (const name of Object.keys(os.networkInterfaces())) {
-                for (const iface of os.networkInterfaces()[name]) {
-                    if (iface.family === 'IPv4' && !iface.internal) {
-                        const parts = iface.address.split('.'); parts.pop(); subnets.push(parts.join('.'));
-                    }
-                }
-            }
-            let found = 0; let scansComplete = 0; const totalScans = subnets.length * 254;
-            if (totalScans === 0) { spinner.style.display = 'none'; resultsDiv.innerHTML = '<span style="color: #ef4444; font-size: 12px;">No network interfaces found.</span>'; return; }
+        document.getElementById('btn-connect-join').addEventListener('click', () => {
+            const input = document.getElementById('invite-input').value.trim().toUpperCase();
+            if (!input || input.length < 3) return;
+            
+            const connectBtn = document.getElementById('btn-connect-join');
+            connectBtn.innerText = "Connecting via DHT..."; connectBtn.disabled = true;
 
-            subnets.forEach(subnet => {
-                for (let i = 1; i <= 254; i++) {
-                    const targetIp = `${subnet}.${i}`;
-                    const scanner = new net.Socket(); scanner.setTimeout(600);
-                    scanner.on('connect', () => {
-                        found++;
-                        const btn = document.createElement('button'); btn.className = 'primary-btn choice-btn'; btn.style.padding = '10px'; btn.style.fontSize = '14px'; btn.style.marginBottom = '0'; btn.innerText = `🟢 Room Found: ${targetIp}`;
-                        btn.onclick = () => { localStorage.setItem('conflictServerUrl', `ws://${targetIp}:8080`); window.location.href = 'app.html'; };
-                        resultsDiv.appendChild(btn); scanner.destroy();
-                    });
-                    const checkDone = () => { scansComplete++; if (scansComplete >= totalScans) { spinner.style.display = 'none'; if (found === 0) resultsDiv.innerHTML += '<span style="color: #ef4444; font-size: 12px;">No active rooms found on your network.</span>'; } };
-                    scanner.on('timeout', () => { scanner.destroy(); checkDone(); }); scanner.on('error', () => { scanner.destroy(); checkDone(); });
-                    scanner.connect(8080, targetIp);
-                }
-            });
-            JSON.parse(localStorage.getItem('conflictRecentRooms') || '[]').forEach(ip => {
-                const btn = document.createElement('button'); btn.className = 'secondary-btn choice-btn'; btn.style.padding = '10px'; btn.style.fontSize = '14px'; btn.style.marginBottom = '0'; btn.innerText = `🕒 History: ${ip}`;
-                btn.onclick = () => { localStorage.setItem('conflictServerUrl', `ws://${ip}:8080`); window.location.href = 'app.html'; };
-                resultsDiv.appendChild(btn);
-            });
+            ipcRenderer.send('join-room', input);
         });
     </script>
 </body>

@@ -1,6 +1,6 @@
 {
   "name": "conflict",
-  "version": "1.6.13",
+  "version": "1.7.0",
   "description": "Secure P2P Comms & Media",
   "author": "YourName",
   "main": "js/main.js",
@@ -9,11 +9,14 @@
     "build": "electron-builder --win"
   },
   "dependencies": {
+    "@sapphi-red/web-noise-suppressor": "^0.4.0",
     "electron-updater": "^6.8.9",
     "localtunnel": "^2.0.2",
+    "mqtt": "^5.16.0",
     "ws": "^8.16.0"
   },
   "devDependencies": {
+    "@electron/rebuild": "^4.2.0",
     "electron": "^44.0.0",
     "electron-builder": "^26.15.3"
   },
