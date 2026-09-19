@@ -1,9 +1,12 @@
 const { app, BrowserWindow, ipcMain, desktopCapturer, session, dialog, shell } = require('electron');
 const { autoUpdater } = require('electron-updater');
 const path = require('path');
-const { startLocalServer, startHostTunnel, stopServer } = require('./server');
+const https = require('https');
+const fs = require('fs');
+const os = require('os');
+const { startLocalServer, stopServer, joinSwarmRoom } = require('./server');
 
-// CRUCIAL: Desativa a camuflagem mDNS e autoriza o Áudio a tocar sem bloqueios silenciosos
+// Prevent Chromium from hiding real virtual adapter IPs
 app.commandLine.appendSwitch('disable-features', 'WebRtcHideLocalIpsWithMdns');
 app.commandLine.appendSwitch('enforce-webrtc-ip-permission-check', 'false');
 app.commandLine.appendSwitch('force-webrtc-ip-handling-policy', 'default');
@@ -13,6 +16,18 @@ let mainWindow;
 
 autoUpdater.setFeedURL({ provider: 'github', owner: 'Aeryn-Mintz', repo: 'conflict' });
 autoUpdater.autoDownload = false; 
+
+ipcMain.on('download-radmin', () => {
+    const dest = path.join(app.getPath('temp'), 'Radmin_VPN_1.4.exe');
+    const file = fs.createWriteStream(dest);
+    https.get('https://www.radmin-vpn.com/download/download.php', (response) => {
+        response.pipe(file);
+        file.on('finish', () => {
+            file.close();
+            shell.openPath(dest); 
+        });
+    });
+});
 
 app.whenReady().then(() => {
     const rootDir = path.join(__dirname, '..');
@@ -39,15 +54,17 @@ app.whenReady().then(() => {
         }).catch(() => callback(null));
     });
 
-    session.defaultSession.webRequest.onBeforeSendHeaders((details, callback) => {
-        details.requestHeaders['Bypass-Tunnel-Reminder'] = 'true';
-        details.requestHeaders['User-Agent'] = 'localtunnel'; 
-        callback({ requestHeaders: details.requestHeaders });
+    // --- HYPERSWARM P2P ROUTES ---
+    ipcMain.on('start-host', async (event) => {
+        // Generate a random 6-character room code (e.g. A4X9B2)
+        const roomCode = Math.random().toString(36).substring(2, 8).toUpperCase();
+        await joinSwarmRoom(roomCode);
+        event.reply('host-started', { roomCode: roomCode });
     });
 
-    ipcMain.on('start-host', async (event) => {
-        const { fullUrl, shareCode } = await startHostTunnel();
-        event.reply('host-started', { fullUrl, shareCode, lanIp });
+    ipcMain.on('join-room', async (event, roomCode) => {
+        await joinSwarmRoom(roomCode);
+        event.reply('room-joined');
     });
 });
 

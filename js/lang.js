@@ -54,13 +54,32 @@ window.applyLang = function(lang) {
     setPlh('chat-input', t.chatPlaceholder);
     const fogBtn = document.getElementById('toggle-fog-btn');
     if (fogBtn) fogBtn.innerText = document.getElementById('fog-canvas')?.style.display === 'none' ? t.enableFog : t.disableFog;
+    
+    // Settings dropdown sync
     const selectEl = document.getElementById('language-select');
     if (selectEl) selectEl.value = lang;
+
+    // Visual feedback for flags
+    document.querySelectorAll('.lang-flag').forEach(el => {
+        el.style.borderColor = 'transparent';
+        el.style.transform = 'scale(1)';
+        el.style.boxShadow = 'none';
+    });
+    const activeFlag = document.getElementById(lang === 'en' ? 'flag-en' : 'flag-pt-br');
+    if (activeFlag) {
+        activeFlag.style.borderColor = 'var(--accent-main)';
+        activeFlag.style.transform = 'scale(1.1)';
+        activeFlag.style.boxShadow = '0 0 10px var(--accent-main)';
+    }
 };
 
 document.addEventListener('DOMContentLoaded', () => {
     let savedLang = localStorage.getItem('conflictLang');
     if (!savedLang) savedLang = navigator.language.toLowerCase().includes('pt') ? 'pt-br' : 'en';
     window.applyLang(savedLang);
+    
+    // Listeners for both the settings dropdown and the visual flags
     document.getElementById('language-select')?.addEventListener('change', (e) => window.applyLang(e.target.value));
+    document.getElementById('flag-en')?.addEventListener('click', () => window.applyLang('en'));
+    document.getElementById('flag-pt-br')?.addEventListener('click', () => window.applyLang('pt-br'));
 });

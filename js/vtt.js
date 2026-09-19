@@ -51,6 +51,7 @@ window.updateCamera = function() {
     if (maxH < viewH) window.cameraY = (viewH - maxH) / 2;
     else window.cameraY = Math.max(viewH - maxH, Math.min(0, window.cameraY));
 
+    mapLayer.style.willChange = 'transform';
     mapLayer.style.transform = `translate(${window.cameraX}px, ${window.cameraY}px) scale(${window.currentZoom})`;
     mapLayer.style.transformOrigin = "0 0";
 };
@@ -87,69 +88,104 @@ window.vttMousedownHandler = (e) => {
 };
 document.addEventListener('mousedown', window.vttMousedownHandler);
 
+window.vttRafPending = false;
+window.lastBroadcasts = {};
+
 if (window.vttMousemoveHandler) document.removeEventListener('mousemove', window.vttMousemoveHandler);
 window.vttMousemoveHandler = (e) => {
-    const scrollArea = document.getElementById('vtt-scroll-area'); 
-    const mapLayer = document.getElementById('vtt-map-layer');
-    
-    if (window.isPanning && scrollArea) { 
-        window.cameraX = window.startCamX + (e.clientX - window.startPanX); window.cameraY = window.startCamY + (e.clientY - window.startPanY); 
-        window.updateCamera(); return;
-    }
-    
-    if (window.resizingToken) {
-        const dx = (e.clientX - window.startResizeX) / window.currentZoom;
-        const newW = Math.max(20, window.startResizeW + dx * 2);
-        const newH = newW / window.startResizeAspect;
-        window.resizingToken.style.width = newW + 'px'; window.resizingToken.style.height = newH + 'px';
-        const tokenId = window.resizingToken.id.replace('map-token-', '');
-        if (window.mapAssets[tokenId]) { window.mapAssets[tokenId].w = newW; window.mapAssets[tokenId].h = newH; window.saveMapState(); }
-        if (window.socket && window.socket.readyState === WebSocket.OPEN) window.socket.send(JSON.stringify({ action: 'token_resize', userId: window.myId, tokenId: tokenId, w: newW, h: newH }));
-        return; 
-    }
-    
-    if (window.isBoxSelecting && window.selectionBoxEl) {
+    if (window.isPanning || window.activeToken || window.resizingToken) e.preventDefault();
+
+    if (window.isDrawing) {
         const [currentX, currentY] = getMousePosition(e);
-        const x = Math.min(window.selectionStartX, currentX); const y = Math.min(window.selectionStartY, currentY);
-        const w = Math.abs(currentX - window.selectionStartX); const h = Math.abs(currentY - window.selectionStartY);
-        
-        window.selectionBoxEl.style.left = x + 'px'; window.selectionBoxEl.style.top = y + 'px';
-        window.selectionBoxEl.style.width = w + 'px'; window.selectionBoxEl.style.height = h + 'px';
-        
-        const boxRect = { left: x, top: y, right: x + w, bottom: y + h };
-        
-        document.querySelectorAll('.asset-item').forEach(el => {
-            const ex = parseFloat(el.style.left) || 0; const ey = parseFloat(el.style.top) || 0;
-            if (ex >= boxRect.left && ex <= boxRect.right && ey >= boxRect.top && ey <= boxRect.bottom) {
-                window.selectedTokens.add(el); el.classList.add('selected');
-            } else {
-                if (!window.initialSelectedTokens.has(el)) { window.selectedTokens.delete(el); el.classList.remove('selected'); }
-            }
-        });
+        if (!window.ctx) return;
+        window.ctx.beginPath(); window.ctx.moveTo(window.lastX, window.lastY); window.ctx.lineTo(currentX, currentY); window.ctx.strokeStyle = window.strokeColor; window.ctx.lineWidth = window.strokeWidth; window.ctx.stroke();
+        if (window.socket && window.socket.readyState === WebSocket.OPEN) window.socket.send(JSON.stringify({ action: 'canvas_draw', userId: window.myId, x0: window.lastX, y0: window.lastY, x1: currentX, y1: currentY, color: window.strokeColor, width: window.strokeWidth }));
+        [window.lastX, window.lastY] = [currentX, currentY];
         return;
     }
 
-    if (window.activeToken && mapLayer && window.canvas) {
-        const dx = (e.clientX - window.startDragX) / window.currentZoom;
-        const dy = (e.clientY - window.startDragY) / window.currentZoom;
+    if (window.vttRafPending) return;
+    window.vttRafPending = true;
 
-        window.selectedTokens.forEach(token => {
-            const offset = window.dragOffsets.get(token);
-            if (!offset) return;
+    const clientX = e.clientX; const clientY = e.clientY; const shiftKey = e.shiftKey;
 
-            let targetX = offset.startX + dx; let targetY = offset.startY + dy;
-            if (e.shiftKey) { targetX = Math.floor(targetX / 50) * 50 + 25; targetY = Math.floor(targetY / 50) * 50 + 25; }
+    requestAnimationFrame(() => {
+        window.vttRafPending = false;
+        
+        const scrollArea = document.getElementById('vtt-scroll-area'); 
+        const mapLayer = document.getElementById('vtt-map-layer');
+        
+        if (window.isPanning && scrollArea) { 
+            window.cameraX = window.startCamX + (clientX - window.startPanX); 
+            window.cameraY = window.startCamY + (clientY - window.startPanY); 
+            window.updateCamera(); 
+            return;
+        }
+        
+        if (window.resizingToken) {
+            const dx = (clientX - window.startResizeX) / window.currentZoom;
+            const newW = Math.max(20, window.startResizeW + dx * 2);
+            const newH = newW / window.startResizeAspect;
+            window.resizingToken.style.width = newW + 'px'; window.resizingToken.style.height = newH + 'px';
+            const tokenId = window.resizingToken.id.replace('map-token-', '');
+            if (window.mapAssets[tokenId]) { window.mapAssets[tokenId].w = newW; window.mapAssets[tokenId].h = newH; }
+            
+            const now = Date.now();
+            if (now - (window.lastBroadcasts[tokenId] || 0) > 30) {
+                if (window.socket && window.socket.readyState === WebSocket.OPEN) window.socket.send(JSON.stringify({ action: 'token_resize', userId: window.myId, tokenId: tokenId, w: newW, h: newH }));
+                window.lastBroadcasts[tokenId] = now;
+            }
+            return; 
+        }
+        
+        if (window.isBoxSelecting && window.selectionBoxEl) {
+            const mapRect = mapLayer.getBoundingClientRect();
+            const currentX = (clientX - mapRect.left) / window.currentZoom;
+            const currentY = (clientY - mapRect.top) / window.currentZoom;
+            const x = Math.min(window.selectionStartX, currentX); const y = Math.min(window.selectionStartY, currentY);
+            const w = Math.abs(currentX - window.selectionStartX); const h = Math.abs(currentY - window.selectionStartY);
+            
+            window.selectionBoxEl.style.left = x + 'px'; window.selectionBoxEl.style.top = y + 'px';
+            window.selectionBoxEl.style.width = w + 'px'; window.selectionBoxEl.style.height = h + 'px';
+            
+            const boxRect = { left: x, top: y, right: x + w, bottom: y + h };
+            
+            document.querySelectorAll('.asset-item').forEach(el => {
+                const ex = parseFloat(el.style.left) || 0; const ey = parseFloat(el.style.top) || 0;
+                if (ex >= boxRect.left && ex <= boxRect.right && ey >= boxRect.top && ey <= boxRect.bottom) {
+                    window.selectedTokens.add(el); el.classList.add('selected');
+                } else {
+                    if (!window.initialSelectedTokens.has(el)) { window.selectedTokens.delete(el); el.classList.remove('selected'); }
+                }
+            });
+            return;
+        }
 
-            targetX = Math.max(0, Math.min(window.mapWidth, targetX)); targetY = Math.max(0, Math.min(window.mapHeight, targetY));
+        if (window.activeToken && mapLayer && window.canvas) {
+            const dx = (clientX - window.startDragX) / window.currentZoom;
+            const dy = (clientY - window.startDragY) / window.currentZoom;
+            const now = Date.now();
 
-            token.style.left = targetX + 'px'; token.style.top = targetY + 'px';
-            const tokenId = token.id.replace('map-token-', '');
-            if (window.mapAssets[tokenId]) { window.mapAssets[tokenId].x = targetX; window.mapAssets[tokenId].y = targetY; }
+            window.selectedTokens.forEach(token => {
+                const offset = window.dragOffsets.get(token);
+                if (!offset) return;
 
-            if (window.socket && window.socket.readyState === WebSocket.OPEN) window.socket.send(JSON.stringify({ action: 'token_move', userId: window.myId, tokenId: tokenId, x: targetX, y: targetY }));
-        });
-        window.saveMapState();
-    }
+                let targetX = offset.startX + dx; let targetY = offset.startY + dy;
+                if (shiftKey) { targetX = Math.floor(targetX / 50) * 50 + 25; targetY = Math.floor(targetY / 50) * 50 + 25; }
+
+                targetX = Math.max(0, Math.min(window.mapWidth, targetX)); targetY = Math.max(0, Math.min(window.mapHeight, targetY));
+
+                token.style.left = targetX + 'px'; token.style.top = targetY + 'px';
+                const tokenId = token.id.replace('map-token-', '');
+                if (window.mapAssets[tokenId]) { window.mapAssets[tokenId].x = targetX; window.mapAssets[tokenId].y = targetY; }
+
+                if (now - (window.lastBroadcasts[tokenId] || 0) > 30) {
+                    if (window.socket && window.socket.readyState === WebSocket.OPEN) window.socket.send(JSON.stringify({ action: 'token_move', userId: window.myId, tokenId: tokenId, x: targetX, y: targetY }));
+                    window.lastBroadcasts[tokenId] = now;
+                }
+            });
+        }
+    });
 };
 document.addEventListener('mousemove', window.vttMousemoveHandler);
 
@@ -158,6 +194,24 @@ window.vttMouseupHandler = (e) => {
     const scrollArea = document.getElementById('vtt-scroll-area');
     if (e.button === 1 && scrollArea) { window.isPanning = false; scrollArea.style.cursor = 'default'; }
     if (window.isBoxSelecting) { window.isBoxSelecting = false; if (window.selectionBoxEl) window.selectionBoxEl.style.display = 'none'; }
+    
+    if (window.activeToken) {
+        window.selectedTokens.forEach(token => {
+            const tokenId = token.id.replace('map-token-', '');
+            if (window.socket && window.socket.readyState === WebSocket.OPEN) {
+                window.socket.send(JSON.stringify({ action: 'token_move', userId: window.myId, tokenId: tokenId, x: parseFloat(token.style.left), y: parseFloat(token.style.top) }));
+            }
+        });
+        window.saveMapState();
+    }
+    if (window.resizingToken) {
+        const tokenId = window.resizingToken.id.replace('map-token-', '');
+        if (window.socket && window.socket.readyState === WebSocket.OPEN) {
+            window.socket.send(JSON.stringify({ action: 'token_resize', userId: window.myId, tokenId: tokenId, w: parseFloat(window.resizingToken.style.width), h: parseFloat(window.resizingToken.style.height) }));
+        }
+        window.saveMapState();
+    }
+
     window.activeToken = null; window.resizingToken = null; window.dragOffsets.clear();
 };
 document.addEventListener('mouseup', window.vttMouseupHandler);
@@ -166,7 +220,6 @@ window.placeTokenOnMap = function(asset, broadcast = true) {
     const layer = document.getElementById('token-layer');
     if (!layer) return;
 
-    // NOVO: DM Spawna itens invisíveis por padrão
     if (broadcast && window.isDM && asset.hidden === undefined) {
         asset.hidden = true;
     }
@@ -194,7 +247,6 @@ window.placeTokenOnMap = function(asset, broadcast = true) {
         
         window.mapAssets[asset.id] = asset; window.saveMapState(); window.applyVisibility(el, asset.hidden);
 
-        // --- SISTEMA DE RIGHT-CLICK (Context Menu) ---
         el.addEventListener('contextmenu', (e) => {
             e.preventDefault(); e.stopPropagation();
             
@@ -222,7 +274,6 @@ window.placeTokenOnMap = function(asset, broadcast = true) {
             const getTargets = () => window.selectedTokens.has(el) ? Array.from(window.selectedTokens) : [el];
             const currentAssetData = window.mapAssets[asset.id];
 
-            // APENAS O DM PODE ESCONDER/REVELAR ITENS
             if (window.isDM) {
                 const visBtn = document.createElement('button');
                 visBtn.className = 'secondary-btn kokonut-btn';
@@ -279,7 +330,6 @@ window.placeTokenOnMap = function(asset, broadcast = true) {
             ctxMenu.style.display = 'flex';
         });
 
-        // --- MOUSE DOWN DRAG LOGIC ---
         el.addEventListener('mousedown', (e) => {
             if (e.button !== 0) return;
             if (window.currentTool !== 'selector') return; 
@@ -552,3 +602,17 @@ window.vttClickHandler = (e) => {
     if (e.target.closest('#add-token-btn')) { document.getElementById('token-upload')?.click(); return; }
 };
 document.addEventListener('click', window.vttClickHandler);
+
+// INICIALIZAÇÃO AUTOMÁTICA DO TABULEIRO
+document.addEventListener('DOMContentLoaded', () => {
+    setTimeout(() => { if (window.initCanvas) window.initCanvas(); }, 500);
+});
+
+// TRAVA DE SEGURANÇA: RECALCULAR AO CLICAR NA ABA
+document.addEventListener('click', (e) => {
+    if (e.target.closest('[data-tab="rpg"]')) {
+        if (!window.canvas || !window.canvas.dataset.initialized) {
+            setTimeout(() => { if (window.initCanvas) window.initCanvas(); }, 100);
+        }
+    }
+});

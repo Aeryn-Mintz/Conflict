@@ -2,24 +2,11 @@ const http = require('http');
 const WebSocket = require('ws');
 const fs = require('fs');
 const path = require('path');
-const os = require('os');
-const localtunnel = require('localtunnel');
+const mqtt = require('mqtt');
 
-let wss = null; let server = null; let tunnelProcess = null;
-
-function getLocalIp() {
-    const interfaces = os.networkInterfaces();
-    let lanIp = '127.0.0.1';
-    for (const name of Object.keys(interfaces)) {
-        for (const iface of interfaces[name]) {
-            if (iface.family === 'IPv4' && !iface.internal) {
-                if (iface.address.startsWith('26.')) return iface.address; 
-                lanIp = iface.address;
-            }
-        }
-    }
-    return lanIp;
-}
+let wss = null; 
+let server = null;
+let mqttClient = null;
 
 function startLocalServer(baseDir) {
     server = http.createServer((req, res) => {
@@ -39,35 +26,60 @@ function startLocalServer(baseDir) {
     });
 
     wss = new WebSocket.Server({ server });
+    
     wss.on('connection', (ws) => {
         ws.on('message', (msg) => {
-            wss.clients.forEach(client => { if (client !== ws && client.readyState === WebSocket.OPEN) client.send(msg.toString()); });
+            const msgStr = msg.toString();
+            
+            // 1. Send locally to your UI
+            wss.clients.forEach(client => { 
+                if (client !== ws && client.readyState === WebSocket.OPEN) client.send(msgStr); 
+            });
+            
+            // 2. Blast it across the internet to your friends
+            if (mqttClient && mqttClient.connected) {
+                mqttClient.publish(mqttClient.roomTopic, msgStr);
+            }
         });
-        ws.on('error', (err) => console.error('Client socket error:', err.message));
     });
     
-    server.listen(8080, '0.0.0.0');
-    return { server, wss, lanIp: `${getLocalIp()}:8080` };
+    server.listen(8080, '127.0.0.1');
+    return { server, wss };
 }
 
-async function startHostTunnel() {
-    let tunnel = null; let shareCode = null;
-    for (let i = 0; i < 3 && !tunnel; i++) {
-        const code = Math.random().toString(36).substring(2, 8);
-        try {
-            tunnel = await localtunnel({ port: 8080, local_host: '127.0.0.1', subdomain: `conflict-${code}` });
-            shareCode = code;
-        } catch (err) { continue; }
-    }
-    if (tunnel) {
-        tunnelProcess = tunnel;
-        tunnel.on('error', (err) => console.log('Tunnel error:', err));
-    }
-    return { fullUrl: tunnel ? tunnel.url : null, shareCode };
+async function joinSwarmRoom(roomCode) {
+    return new Promise((resolve) => {
+        if (mqttClient) mqttClient.end(); // Clear old rooms
+        
+        const topic = `conflict-room-${roomCode.toUpperCase()}`;
+        console.log("Connecting to public broker for room:", roomCode);
+        
+        // Connect to a free, massive public messaging broker
+        mqttClient = mqtt.connect('mqtt://broker.emqx.io:1883');
+        mqttClient.roomTopic = topic;
+
+        mqttClient.on('connect', () => {
+            mqttClient.subscribe(topic, () => {
+                console.log("Successfully joined room:", roomCode);
+                resolve(roomCode); // Instantly resolves, no UI freezing!
+            });
+        });
+
+        // When your friend sends data, route it back into your local UI
+        mqttClient.on('message', (receivedTopic, message) => {
+            if (receivedTopic === topic && wss) {
+                const msgStr = message.toString();
+                wss.clients.forEach(client => { 
+                    if (client.readyState === WebSocket.OPEN) client.send(msgStr); 
+                });
+            }
+        });
+    });
 }
 
 function stopServer() {
-    if (tunnelProcess) tunnelProcess.close();
     if (server) server.close();
+    if (mqttClient) mqttClient.end();
 }
-module.exports = { startLocalServer, startHostTunnel, stopServer };
+
+module.exports = { startLocalServer, stopServer, joinSwarmRoom };

@@ -1,10 +1,13 @@
 window.saveTimeout = null;
 window.npcRoster = JSON.parse(localStorage.getItem('conflict_npcs') || '[]');
 
-// TODAS AS BLUEPRINTS RESTAURADAS INTEGRALMENTE
+window.initiativeList = [];
+window.initiativeTurn = 0;
+
+// TODAS AS BLUEPRINTS RESTAURADAS
 window.sheetBlueprints = {
     dnd: `<div class="sheet-row"><input type="text" class="sheet-input dyn-save" data-key="name" placeholder="Character Name" style="font-size: 22px; font-weight: bold; flex: 2; color: var(--accent-main);"><input type="text" class="sheet-input dyn-save" data-key="class" placeholder="Class & Level" style="flex: 1;"><input type="text" class="sheet-input dyn-save" data-key="race" placeholder="Race & Background" style="flex: 1;"></div><div class="sheet-row" style="margin-top: 15px;"><div class="sheet-col" style="flex: 2;"><div class="sheet-row" style="gap: 10px; margin-bottom: 15px;"><div class="sheet-stat-box" style="flex: 1;"><label>Armor Class</label><input type="text" class="dyn-save" data-key="ac"></div><div class="sheet-stat-box" style="flex: 1;"><label class="rollable" data-dice="1d20" data-name="Initiative" data-mod-target="init">Initiative</label><input type="text" class="dyn-save" data-key="init"></div><div class="sheet-stat-box" style="flex: 1;"><label>Speed</label><input type="text" class="dyn-save" data-key="speed"></div><div class="sheet-stat-box" style="flex: 1;"><label>Prof Bonus</label><input type="text" class="dyn-save" data-key="prof" id="dnd-prof" value="2"></div></div><div class="sheet-row" style="gap: 10px; margin-bottom: 15px;"><div class="sheet-stat-box" style="flex: 2;"><label>Current Hit Points</label><input type="text" class="dyn-save" data-key="hp" placeholder="Max / Current" style="font-size: 22px;"></div><div class="sheet-stat-box" style="flex: 1;"><label>Temp HP</label><input type="text" class="dyn-save" data-key="temp_hp"></div><div class="sheet-stat-box" style="flex: 1;"><label>Hit Dice</label><input type="text" class="dyn-save" data-key="hit_dice"></div></div><div class="sheet-box"><h4>Attacks & Spellcasting</h4><textarea class="sheet-textarea dyn-save" data-key="attacks" style="min-height: 120px;" placeholder="Weapon | Atk Bonus | Damage/Type"></textarea></div><div class="sheet-box" style="margin-top: 15px;"><h4>Equipment & Gold</h4><textarea class="sheet-textarea dyn-save" data-key="inventory" style="min-height: 100px;"></textarea></div></div><div class="sheet-col" style="flex: 3;"><div class="sheet-box"><h4>Attributes & Saves</h4><div style="display: flex; gap: 10px; justify-content: space-between; margin-bottom: 15px;"><div class="attr-box"><label class="rollable" data-dice="1d20" data-name="STR Check" data-mod-target="str" data-is-attr="true">STR</label><input type="text" class="dyn-save dnd-attr" data-key="str" id="dnd-str" value="10"></div><div class="attr-box"><label class="rollable" data-dice="1d20" data-name="DEX Check" data-mod-target="dex" data-is-attr="true">DEX</label><input type="text" class="dyn-save dnd-attr" data-key="dex" id="dnd-dex" value="10"></div><div class="attr-box"><label class="rollable" data-dice="1d20" data-name="CON Check" data-mod-target="con" data-is-attr="true">CON</label><input type="text" class="dyn-save dnd-attr" data-key="con" id="dnd-con" value="10"></div><div class="attr-box"><label class="rollable" data-dice="1d20" data-name="INT Check" data-mod-target="int" data-is-attr="true">INT</label><input type="text" class="dyn-save dnd-attr" data-key="int" id="dnd-int" value="10"></div><div class="attr-box"><label class="rollable" data-dice="1d20" data-name="WIS Check" data-mod-target="wis" data-is-attr="true">WIS</label><input type="text" class="dyn-save dnd-attr" data-key="wis" id="dnd-wis" value="10"></div><div class="attr-box"><label class="rollable" data-dice="1d20" data-name="CHA Check" data-mod-target="cha" data-is-attr="true">CHA</label><input type="text" class="dyn-save dnd-attr" data-key="cha" id="dnd-cha" value="10"></div></div><h4>Skills</h4><div class="skills-grid"><div class="skill-item"><span><input type="checkbox" class="prof-toggle dyn-save" data-key="prof_acro" data-attr="dex"> <span class="rollable" data-dice="1d20" data-name="Acrobatics" data-mod-target="sk_acro">Acrobatics</span></span><input type="text" class="dyn-save dnd-skill" data-key="sk_acro" readonly></div><div class="skill-item"><span><input type="checkbox" class="prof-toggle dyn-save" data-key="prof_anim" data-attr="wis"> <span class="rollable" data-dice="1d20" data-name="Animal Handling" data-mod-target="sk_anim">Animal Hand</span></span><input type="text" class="dyn-save dnd-skill" data-key="sk_anim" readonly></div><div class="skill-item"><span><input type="checkbox" class="prof-toggle dyn-save" data-key="prof_arca" data-attr="int"> <span class="rollable" data-dice="1d20" data-name="Arcana" data-mod-target="sk_arca">Arcana</span></span><input type="text" class="dyn-save dnd-skill" data-key="sk_arca" readonly></div><div class="skill-item"><span><input type="checkbox" class="prof-toggle dyn-save" data-key="prof_athl" data-attr="str"> <span class="rollable" data-dice="1d20" data-name="Athletics" data-mod-target="sk_athl">Athletics</span></span><input type="text" class="dyn-save dnd-skill" data-key="sk_athl" readonly></div><div class="skill-item"><span><input type="checkbox" class="prof-toggle dyn-save" data-key="prof_dece" data-attr="cha"> <span class="rollable" data-dice="1d20" data-name="Deception" data-mod-target="sk_dece">Deception</span></span><input type="text" class="dyn-save dnd-skill" data-key="sk_dece" readonly></div><div class="skill-item"><span><input type="checkbox" class="prof-toggle dyn-save" data-key="prof_hist" data-attr="int"> <span class="rollable" data-dice="1d20" data-name="History" data-mod-target="sk_hist">History</span></span><input type="text" class="dyn-save dnd-skill" data-key="sk_hist" readonly></div><div class="skill-item"><span><input type="checkbox" class="prof-toggle dyn-save" data-key="prof_ins" data-attr="wis"> <span class="rollable" data-dice="1d20" data-name="Insight" data-mod-target="sk_ins">Insight</span></span><input type="text" class="dyn-save dnd-skill" data-key="sk_ins" readonly></div><div class="skill-item"><span><input type="checkbox" class="prof-toggle dyn-save" data-key="prof_inti" data-attr="cha"> <span class="rollable" data-dice="1d20" data-name="Intimidation" data-mod-target="sk_inti">Intimidation</span></span><input type="text" class="dyn-save dnd-skill" data-key="sk_inti" readonly></div><div class="skill-item"><span><input type="checkbox" class="prof-toggle dyn-save" data-key="prof_inv" data-attr="int"> <span class="rollable" data-dice="1d20" data-name="Investigation" data-mod-target="sk_inv">Investigation</span></span><input type="text" class="dyn-save dnd-skill" data-key="sk_inv" readonly></div><div class="skill-item"><span><input type="checkbox" class="prof-toggle dyn-save" data-key="prof_med" data-attr="wis"> <span class="rollable" data-dice="1d20" data-name="Medicine" data-mod-target="sk_med">Medicine</span></span><input type="text" class="dyn-save dnd-skill" data-key="sk_med" readonly></div><div class="skill-item"><span><input type="checkbox" class="prof-toggle dyn-save" data-key="prof_nat" data-attr="int"> <span class="rollable" data-dice="1d20" data-name="Nature" data-mod-target="sk_nat">Nature</span></span><input type="text" class="dyn-save dnd-skill" data-key="sk_nat" readonly></div><div class="skill-item"><span><input type="checkbox" class="prof-toggle dyn-save" data-key="prof_perc" data-attr="wis"> <span class="rollable" data-dice="1d20" data-name="Perception" data-mod-target="sk_perc">Perception</span></span><input type="text" class="dyn-save dnd-skill" data-key="sk_perc" readonly></div><div class="skill-item"><span><input type="checkbox" class="prof-toggle dyn-save" data-key="prof_perf" data-attr="cha"> <span class="rollable" data-dice="1d20" data-name="Performance" data-mod-target="sk_perf">Performance</span></span><input type="text" class="dyn-save dnd-skill" data-key="sk_perf" readonly></div><div class="skill-item"><span><input type="checkbox" class="prof-toggle dyn-save" data-key="prof_pers" data-attr="cha"> <span class="rollable" data-dice="1d20" data-name="Persuasion" data-mod-target="sk_pers">Persuasion</span></span><input type="text" class="dyn-save dnd-skill" data-key="sk_pers" readonly></div><div class="skill-item"><span><input type="checkbox" class="prof-toggle dyn-save" data-key="prof_rel" data-attr="int"> <span class="rollable" data-dice="1d20" data-name="Religion" data-mod-target="sk_rel">Religion</span></span><input type="text" class="dyn-save dnd-skill" data-key="sk_rel" readonly></div><div class="skill-item"><span><input type="checkbox" class="prof-toggle dyn-save" data-key="prof_slei" data-attr="dex"> <span class="rollable" data-dice="1d20" data-name="Sleight of Hand" data-mod-target="sk_slei">Sleight Hand</span></span><input type="text" class="dyn-save dnd-skill" data-key="sk_slei" readonly></div><div class="skill-item"><span><input type="checkbox" class="prof-toggle dyn-save" data-key="prof_ste" data-attr="dex"> <span class="rollable" data-dice="1d20" data-name="Stealth" data-mod-target="sk_ste">Stealth</span></span><input type="text" class="dyn-save dnd-skill" data-key="sk_ste" readonly></div><div class="skill-item"><span><input type="checkbox" class="prof-toggle dyn-save" data-key="prof_surv" data-attr="wis"> <span class="rollable" data-dice="1d20" data-name="Survival" data-mod-target="sk_surv">Survival</span></span><input type="text" class="dyn-save dnd-skill" data-key="sk_surv" readonly></div></div></div><div class="sheet-box" style="margin-top: 15px;"><h4>Features, Traits & Proficiencies</h4><textarea class="sheet-textarea dyn-save" data-key="features" style="min-height: 150px;"></textarea></div></div></div>`,
-    daggerheart: `<div class="sheet-row"><input type="text" class="sheet-input dyn-save" data-key="name" placeholder="Character Name" style="font-size: 20px; font-weight: bold; flex: 2; color: var(--accent-main);"><input type="text" class="sheet-input dyn-save" data-key="class" placeholder="Class & Subclass" style="flex: 2;"><input type="text" class="sheet-input dyn-save" data-key="level" placeholder="Level" style="flex: 1;"></div><div class="sheet-row" style="margin: 15px 0; gap: 10px;"><div class="sheet-stat-box" style="flex: 1;"><label>HOPE</label><input type="text" class="dyn-save" data-key="hope"></div><div class="sheet-stat-box" style="flex: 1; border-color: #ef4444;"><label>FEAR</label><input type="text" class="dyn-save" data-key="fear" style="color: #ef4444;"></div><div class="sheet-stat-box" style="flex: 1;"><label>HP</label><input type="text" class="dyn-save" data-key="hp"></div><div class="sheet-stat-box" style="flex: 1;"><label>STRESS</label><input type="text" class="dyn-save" data-key="stress"></div><div class="sheet-stat-box" style="flex: 1.5;"><label class="rollable" data-dice="1d20" data-name="Evasion" data-mod-target="evasion">EVASION</label><div style="display:flex; gap:5px; align-items:center;"><input type="text" class="dyn-save dh-base-evasion" data-key="base_evasion" placeholder="Base" style="font-size: 12px; border-right: 1px solid var(--border-color); padding-right: 5px;" title="Base Class Evasion"><input type="text" class="dyn-save dh-evasion" data-key="evasion" title="Total Evasion"></div></div><div class="sheet-stat-box" style="flex: 1;"><label>ARMOR</label><input type="text" class="dyn-save" data-key="armor"></div></div><div class="sheet-row"><div class="sheet-col" style="flex: 1;"><div class="sheet-box"><h4>Traits & Attributes</h4><div class="skills-grid" style="grid-template-columns: 1fr;"><div class="skill-item"><span class="rollable" data-dice="2d12" data-name="Agility Roll" data-mod-target="agility">Agility</span><input type="text" class="dyn-save dh-agi" data-key="agility"></div><div class="skill-item"><span class="rollable" data-dice="2d12" data-name="Strength Roll" data-mod-target="strength">Strength</span><input type="text" class="dyn-save" data-key="strength"></div><div class="skill-item"><span class="rollable" data-dice="2d12" data-name="Finesse Roll" data-mod-target="finesse">Finesse</span><input type="text" class="dyn-save" data-key="finesse"></div><div class="skill-item"><span class="rollable" data-dice="2d12" data-name="Instinct Roll" data-mod-target="instinct">Instinct</span><input type="text" class="dyn-save" data-key="instinct"></div><div class="skill-item"><span class="rollable" data-dice="2d12" data-name="Presence Roll" data-mod-target="presence">Presence</span><input type="text" class="dyn-save" data-key="presence"></div><div class="skill-item"><span class="rollable" data-dice="2d12" data-name="Knowledge Roll" data-mod-target="knowledge">Knowledge</span><input type="text" class="dyn-save" data-key="knowledge"></div></div></div><div class="sheet-box" style="margin-top: 15px;"><h4>Experiences</h4><textarea class="sheet-textarea dyn-save" data-key="experiences" style="min-height: 100px;"></textarea></div></div><div class="sheet-col" style="flex: 2;"><div class="sheet-box" style="margin-bottom: 15px;"><h4>Damage Thresholds</h4><div style="display: flex; gap: 10px;"><input type="text" class="sheet-input dyn-save" data-key="minor" placeholder="Minor"><input type="text" class="sheet-input dyn-save" data-key="major" placeholder="Major"><input type="text" class="sheet-input dyn-save" data-key="severe" placeholder="Severe"></div></div><div class="sheet-box" style="margin-bottom: 15px;"><h4>Active Weapons</h4><textarea class="sheet-textarea dyn-save" data-key="weapons" style="min-height: 100px;"></textarea></div><div class="sheet-box"><h4>Domain Cards & Abilities</h4><textarea class="sheet-textarea dyn-save" data-key="abilities" style="min-height: 150px;"></textarea></div></div></div>`,
+    daggerheart: `<div class="sheet-row"><input type="text" class="sheet-input dyn-save" data-key="name" placeholder="Character Name" style="font-size: 20px; font-weight: bold; flex: 2; color: var(--accent-main);"><input type="text" class="sheet-input dyn-save" data-key="class" placeholder="Class & Subclass" style="flex: 2;"><input type="text" class="sheet-input dyn-save" data-key="level" placeholder="Level" style="flex: 1;"></div><div class="sheet-row" style="margin: 15px 0; gap: 10px;"><div class="sheet-stat-box" style="flex: 1;"><label>hope</label><input type="text" class="dyn-save" data-key="hope"></div><div class="sheet-stat-box" style="flex: 1; border-color: #ef4444;"><label>FEAR</label><input type="text" class="dyn-save" data-key="fear" style="color: #ef4444;"></div><div class="sheet-stat-box" style="flex: 1;"><label>HP</label><input type="text" class="dyn-save" data-key="hp"></div><div class="sheet-stat-box" style="flex: 1;"><label>STRESS</label><input type="text" class="dyn-save" data-key="stress"></div><div class="sheet-stat-box" style="flex: 1.5;"><label class="rollable" data-dice="1d20" data-name="Evasion" data-mod-target="evasion">EVASION</label><div style="display:flex; gap:5px; align-items:center;"><input type="text" class="dyn-save dh-base-evasion" data-key="base_evasion" placeholder="Base" style="font-size: 12px; border-right: 1px solid var(--border-color); padding-right: 5px;" title="Base Class Evasion"><input type="text" class="dyn-save dh-evasion" data-key="evasion" title="Total Evasion"></div></div><div class="sheet-stat-box" style="flex: 1;"><label>ARMOR</label><input type="text" class="dyn-save" data-key="armor"></div></div><div class="sheet-row"><div class="sheet-col" style="flex: 1;"><div class="sheet-box"><h4>Traits & Attributes</h4><div class="skills-grid" style="grid-template-columns: 1fr;"><div class="skill-item"><span class="rollable" data-dice="2d12" data-name="Agility Roll" data-mod-target="agility">Agility</span><input type="text" class="dyn-save dh-agi" data-key="agility"></div><div class="skill-item"><span class="rollable" data-dice="2d12" data-name="Strength Roll" data-mod-target="strength">Strength</span><input type="text" class="dyn-save" data-key="strength"></div><div class="skill-item"><span class="rollable" data-dice="2d12" data-name="Finesse Roll" data-mod-target="finesse">Finesse</span><input type="text" class="dyn-save" data-key="finesse"></div><div class="skill-item"><span class="rollable" data-dice="2d12" data-name="Instinct Roll" data-mod-target="instinct">Instinct</span><input type="text" class="dyn-save" data-key="instinct"></div><div class="skill-item"><span class="rollable" data-dice="2d12" data-name="Presence Roll" data-mod-target="presence">Presence</span><input type="text" class="dyn-save" data-key="presence"></div><div class="skill-item"><span class="rollable" data-dice="2d12" data-name="Knowledge Roll" data-mod-target="knowledge">Knowledge</span><input type="text" class="dyn-save" data-key="knowledge"></div></div></div><div class="sheet-box" style="margin-top: 15px;"><h4>Experiences</h4><textarea class="sheet-textarea dyn-save" data-key="experiences" style="min-height: 100px;"></textarea></div></div><div class="sheet-col" style="flex: 2;"><div class="sheet-box" style="margin-bottom: 15px;"><h4>Damage Thresholds</h4><div style="display: flex; gap: 10px;"><input type="text" class="sheet-input dyn-save" data-key="minor" placeholder="Minor"><input type="text" class="sheet-input dyn-save" data-key="major" placeholder="Major"><input type="text" class="sheet-input dyn-save" data-key="severe" placeholder="Severe"></div></div><div class="sheet-box" style="margin-bottom: 15px;"><h4>Active Weapons</h4><textarea class="sheet-textarea dyn-save" data-key="weapons" style="min-height: 100px;"></textarea></div><div class="sheet-box"><h4>Domain Cards & Abilities</h4><textarea class="sheet-textarea dyn-save" data-key="abilities" style="min-height: 150px;"></textarea></div></div></div>`,
     aquelarre: `<div class="sheet-row"><input type="text" class="sheet-input dyn-save" data-key="name" placeholder="Name" style="font-size: 20px; font-weight: bold; flex: 2; color: var(--accent-main);"><input type="text" class="sheet-input dyn-save" data-key="profession" placeholder="Social Status / Profession" style="flex: 2;"></div><div class="sheet-row" style="margin: 15px 0; gap: 10px;"><div class="sheet-stat-box" style="flex: 1;"><label class="rollable" data-dice="1d100" data-name="Rationality Test" data-mod-target="rr">Rationality</label><input type="text" class="dyn-save aquelarre-rr" data-key="rr"></div><div class="sheet-stat-box" style="flex: 1; border-color: #ef4444;"><label class="rollable" data-dice="1d100" data-name="Irrationality Test" data-mod-target="irr">Irrationality</label><input type="text" class="dyn-save aquelarre-irr" data-key="irr" style="color: #ef4444;"></div><div class="sheet-stat-box" style="flex: 1;"><label>Health (HP)</label><input type="text" class="dyn-save aquelarre-hp" data-key="hp"></div><div class="sheet-stat-box" style="flex: 1;"><label>Faith Points</label><input type="text" class="dyn-save" data-key="faith"></div><div class="sheet-stat-box" style="flex: 1;"><label class="rollable" data-dice="1d100" data-name="Luck Roll" data-mod-target="luck">Luck</label><input type="text" class="dyn-save" data-key="luck"></div></div><div class="sheet-row"><div class="sheet-col" style="flex: 1;"><div class="sheet-box"><h4>Primary Characteristics</h4><div class="skills-grid" style="grid-template-columns: 1fr;"><div class="skill-item"><span class="rollable" data-dice="1d100" data-name="Strength Check" data-mod-target="str">Strength (STR)</span><input type="text" class="dyn-save aquelarre-str" data-key="str"></div><div class="skill-item"><span class="rollable" data-dice="1d100" data-name="Agility Check" data-mod-target="agi">Agility (AGI)</span><input type="text" class="dyn-save" data-key="agi"></div><div class="skill-item"><span class="rollable" data-dice="1d100" data-name="Dexterity Check" data-mod-target="dex">Dexterity (DEX)</span><input type="text" class="dyn-save" data-key="dex"></div><div class="skill-item"><span class="rollable" data-dice="1d100" data-name="Stamina Check" data-mod-target="sta">Stamina (STA)</span><input type="text" class="dyn-save aquelarre-sta" data-key="sta"></div><div class="skill-item"><span class="rollable" data-dice="1d100" data-name="Perception Check" data-mod-target="per">Perception (PER)</span><input type="text" class="dyn-save" data-key="per"></div><div class="skill-item"><span class="rollable" data-dice="1d100" data-name="Communication Check" data-mod-target="com">Communication (COM)</span><input type="text" class="dyn-save" data-key="com"></div><div class="skill-item"><span class="rollable" data-dice="1d100" data-name="Culture Check" data-mod-target="cul">Culture (CUL)</span><input type="text" class="dyn-save" data-key="cul"></div></div></div></div><div class="sheet-col" style="flex: 2;"><div class="sheet-box" style="margin-bottom: 15px;"><h4>Core Competences</h4><div class="skills-grid"><div class="skill-item"><span class="rollable" data-dice="1d100" data-name="Alertness" data-mod-target="sk_alert">Alertness</span><input type="text" class="dyn-save" data-key="sk_alert"></div><div class="skill-item"><span class="rollable" data-dice="1d100" data-name="Brawl" data-mod-target="sk_brawl">Brawl</span><input type="text" class="dyn-save" data-key="sk_brawl"></div><div class="skill-item"><span class="rollable" data-dice="1d100" data-name="Dodge" data-mod-target="sk_dodge">Dodge</span><input type="text" class="dyn-save" data-key="sk_dodge"></div><div class="skill-item"><span class="rollable" data-dice="1d100" data-name="Empathy" data-mod-target="sk_emp">Empathy</span><input type="text" class="dyn-save" data-key="sk_emp"></div><div class="skill-item"><span class="rollable" data-dice="1d100" data-name="Eloquence" data-mod-target="sk_elo">Eloquence</span><input type="text" class="dyn-save" data-key="sk_elo"></div><div class="skill-item"><span class="rollable" data-dice="1d100" data-name="Listen" data-mod-target="sk_list">Listen</span><input type="text" class="dyn-save" data-key="sk_list"></div><div class="skill-item"><span class="rollable" data-dice="1d100" data-name="Melee Weapons" data-mod-target="sk_melee">Melee Weapons</span><input type="text" class="dyn-save" data-key="sk_melee"></div><div class="skill-item"><span class="rollable" data-dice="1d100" data-name="Memory" data-mod-target="sk_mem">Memory</span><input type="text" class="dyn-save" data-key="sk_mem"></div><div class="skill-item"><span class="rollable" data-dice="1d100" data-name="Missile Weapons" data-mod-target="sk_miss">Missile Weapons</span><input type="text" class="dyn-save" data-key="sk_miss"></div><div class="skill-item"><span class="rollable" data-dice="1d100" data-name="Ride" data-mod-target="sk_ride">Ride</span><input type="text" class="dyn-save" data-key="sk_ride"></div><div class="skill-item"><span class="rollable" data-dice="1d100" data-name="Stealth" data-mod-target="sk_stealth">Stealth</span><input type="text" class="dyn-save" data-key="sk_stealth"></div><div class="skill-item"><span class="rollable" data-dice="1d100" data-name="Theology" data-mod-target="sk_theo">Theology</span><input type="text" class="dyn-save" data-key="sk_theo"></div></div></div><div class="sheet-box"><h4>Spells, Rituals & Inventory</h4><textarea class="sheet-textarea dyn-save" data-key="magic" style="min-height: 150px;"></textarea></div></div></div>`,
     vampire: `<div class="sheet-row"><input type="text" class="sheet-input dyn-save" data-key="name" placeholder="Name" style="font-size: 20px; font-weight: bold; flex: 2; color: #ef4444;"><input type="text" class="sheet-input dyn-save" data-key="clan" placeholder="Clan & Generation" style="flex: 1;"><input type="text" class="sheet-input dyn-save" data-key="concept" placeholder="Concept" style="flex: 1;"></div><div class="sheet-row" style="margin: 15px 0; gap: 10px;"><div class="sheet-stat-box" style="flex: 1;"><label>Health (HP)</label><input type="text" class="dyn-save vamp-hp" data-key="hp"></div><div class="sheet-stat-box" style="flex: 1;"><label>Willpower</label><input type="text" class="dyn-save vamp-will" data-key="will"></div><div class="sheet-stat-box" style="flex: 1; border-color: #ef4444;"><label class="rollable" data-dice="1d10" data-name="Hunger Roll" data-mod-target="hunger">Hunger</label><input type="text" class="dyn-save" data-key="hunger" style="color: #ef4444;"></div><div class="sheet-stat-box" style="flex: 1;"><label class="rollable" data-dice="1d10" data-name="Humanity" data-mod-target="humanity">Humanity</label><input type="text" class="dyn-save" data-key="humanity"></div><div class="sheet-stat-box" style="flex: 1; border-color: #fbbf24;"><label>Blood Potency</label><input type="text" class="dyn-save" data-key="potency" style="color: #fbbf24;"></div></div><div class="sheet-row"><div class="sheet-col" style="flex: 1;"><div class="sheet-box"><h4>Attributes</h4><label style="font-size:10px; color:var(--text-muted);">Physical</label><div class="skills-grid" style="grid-template-columns: 1fr; margin-bottom: 10px;"><div class="skill-item"><span class="rollable" data-dice="1d10" data-name="Strength" data-mod-target="str">Strength</span><input type="text" class="dyn-save" data-key="str"></div><div class="skill-item"><span class="rollable" data-dice="1d10" data-name="Dexterity" data-mod-target="dex">Dexterity</span><input type="text" class="dyn-save" data-key="dex"></div><div class="skill-item"><span class="rollable" data-dice="1d10" data-name="Stamina" data-mod-target="sta">Stamina</span><input type="text" class="dyn-save vamp-sta" data-key="sta"></div></div><label style="font-size:10px; color:var(--text-muted);">Social</label><div class="skills-grid" style="grid-template-columns: 1fr; margin-bottom: 10px;"><div class="skill-item"><span class="rollable" data-dice="1d10" data-name="Charisma" data-mod-target="cha">Charisma</span><input type="text" class="dyn-save" data-key="cha"></div><div class="skill-item"><span class="rollable" data-dice="1d10" data-name="Manipulation" data-mod-target="man">Manipulation</span><input type="text" class="dyn-save" data-key="man"></div><div class="skill-item"><span class="rollable" data-dice="1d10" data-name="Composure" data-mod-target="com">Composure</span><input type="text" class="dyn-save vamp-com" data-key="com"></div></div><label style="font-size:10px; color:var(--text-muted);">Mental</label><div class="skills-grid" style="grid-template-columns: 1fr;"><div class="skill-item"><span class="rollable" data-dice="1d10" data-name="Intelligence" data-mod-target="int">Intelligence</span><input type="text" class="dyn-save" data-key="int"></div><div class="skill-item"><span class="rollable" data-dice="1d10" data-name="Wits" data-mod-target="wit">Wits</span><input type="text" class="dyn-save" data-key="wit"></div><div class="skill-item"><span class="rollable" data-dice="1d10" data-name="Resolve" data-mod-target="res">Resolve</span><input type="text" class="dyn-save vamp-res" data-key="res"></div></div></div></div><div class="sheet-col" style="flex: 2;"><div class="sheet-box" style="margin-bottom: 15px;"><h4>Skills</h4><textarea class="sheet-textarea dyn-save" data-key="skills" style="min-height: 100px;" placeholder="Athletics, Brawl, Firearms, Persuasion, Occult..."></textarea></div><div class="sheet-box"><h4>Disciplines & Advantages</h4><textarea class="sheet-textarea dyn-save" data-key="disciplines" style="min-height: 150px;"></textarea></div></div></div>`,
     assimilacao: `<div class="sheet-row"><input type="text" class="sheet-input dyn-save" data-key="name" placeholder="Nome do Personagem" style="font-size: 20px; font-weight: bold; flex: 2; color: var(--accent-main);"><input type="text" class="sheet-input dyn-save" data-key="player" placeholder="Origem / Jogador" style="flex: 1;"></div><div class="sheet-row" style="margin: 15px 0; gap: 10px;"><div class="sheet-stat-box" style="flex: 1;"><label>Vitalidade</label><input type="text" class="dyn-save ass-hp" data-key="vitality"></div><div class="sheet-stat-box" style="flex: 1;"><label>Saúde Mental</label><input type="text" class="dyn-save ass-mental" data-key="mental_hp"></div><div class="sheet-stat-box" style="flex: 1;"><label>Defesa</label><input type="text" class="dyn-save" data-key="defesa"></div><div class="sheet-stat-box" style="flex: 1;"><label class="rollable" data-dice="1d20" data-name="Teste de Esquiva" data-mod-target="esquiva">Esquiva</label><input type="text" class="dyn-save ass-esq" data-key="esquiva"></div><div class="sheet-stat-box" style="flex: 1;"><label>Velocidade</label><input type="text" class="dyn-save" data-key="velocidade"></div><div class="sheet-stat-box" style="flex: 1;"><label>Carga</label><input type="text" class="dyn-save ass-carga" data-key="carga"></div></div><div class="sheet-row"><div class="sheet-col" style="flex: 1;"><div class="sheet-box"><h4>Atributos Principais</h4><label style="font-size:10px; color:var(--text-muted);">Corpo</label><div class="skills-grid" style="grid-template-columns: 1fr; margin-bottom: 10px;"><div class="skill-item"><span class="rollable" data-dice="1d20" data-name="Força" data-mod-target="forca">Força</span><input type="text" class="dyn-save ass-forca" data-key="forca"></div><div class="skill-item"><span class="rollable" data-dice="1d20" data-name="Agilidade" data-mod-target="agilidade">Agilidade</span><input type="text" class="dyn-save ass-agi" data-key="agilidade"></div><div class="skill-item"><span class="rollable" data-dice="1d20" data-name="Metabolismo" data-mod-target="metabolismo">Metabolismo</span><input type="text" class="dyn-save ass-met" data-key="metabolismo"></div></div><label style="font-size:10px; color:var(--text-muted);">Mente</label><div class="skills-grid" style="grid-template-columns: 1fr; margin-bottom: 10px;"><div class="skill-item"><span class="rollable" data-dice="1d20" data-name="Intelecto" data-mod-target="intelecto">Intelecto</span><input type="text" class="dyn-save ass-int" data-key="intelecto"></div><div class="skill-item"><span class="rollable" data-dice="1d20" data-name="Raciocínio" data-mod-target="raciocinio">Raciocínio</span><input type="text" class="dyn-save" data-key="raciocinio"></div><div class="skill-item"><span class="rollable" data-dice="1d20" data-name="Percepção" data-mod-target="percepcao">Percepção</span><input type="text" class="dyn-save ass-perc" data-key="percepcao"></div></div><label style="font-size:10px; color:var(--text-muted);">Essência</label><div class="skills-grid" style="grid-template-columns: 1fr;"><div class="skill-item"><span class="rollable" data-dice="1d20" data-name="Carisma" data-mod-target="carisma">Carisma</span><input type="text" class="dyn-save" data-key="carisma"></div><div class="skill-item"><span class="rollable" data-dice="1d20" data-name="Manipulação" data-mod-target="manipulacao">Manipulação</span><input type="text" class="dyn-save" data-key="manipulacao"></div><div class="skill-item"><span class="rollable" data-dice="1d20" data-name="Propósito" data-mod-target="proposito">Propósito</span><input type="text" class="dyn-save ass-prop" data-key="proposito"></div></div></div></div><div class="sheet-col" style="flex: 2;"><div class="sheet-box" style="margin-bottom: 15px;"><h4>Aptidões & Perícias</h4><div class="skills-grid"><div class="skill-item"><span class="rollable" data-dice="1d20" data-name="Atletismo" data-mod-target="sk_atl">Atletismo</span><input type="text" class="dyn-save" data-key="sk_atl"></div><div class="skill-item"><span class="rollable" data-dice="1d20" data-name="Furtividade" data-mod-target="sk_fur">Furtividade</span><input type="text" class="dyn-save" data-key="sk_fur"></div><div class="skill-item"><span class="rollable" data-dice="1d20" data-name="Investigação" data-mod-target="sk_inv">Investigação</span><input type="text" class="dyn-save" data-key="sk_inv"></div><div class="skill-item"><span class="rollable" data-dice="1d20" data-name="Luta" data-mod-target="sk_lut">Luta</span><input type="text" class="dyn-save" data-key="sk_lut"></div><div class="skill-item"><span class="rollable" data-dice="1d20" data-name="Medicina" data-mod-target="sk_med">Medicina</span><input type="text" class="dyn-save" data-key="sk_med"></div><div class="skill-item"><span class="rollable" data-dice="1d20" data-name="Mira" data-mod-target="sk_mir">Mira</span><input type="text" class="dyn-save" data-key="sk_mir"></div><div class="skill-item"><span class="rollable" data-dice="1d20" data-name="Sobrevivência" data-mod-target="sk_sob">Sobrevivência</span><input type="text" class="dyn-save" data-key="sk_sob"></div><div class="skill-item"><span class="rollable" data-dice="1d20" data-name="Tecnologia" data-mod-target="sk_tec">Tecnologia</span><input type="text" class="dyn-save" data-key="sk_tec"></div></div></div><div class="sheet-box"><h4>Mutação, Anomalia & Inventário</h4><textarea class="sheet-textarea dyn-save" data-key="skills" style="min-height: 150px;"></textarea></div></div></div>`,
@@ -147,13 +150,18 @@ function renderCharacterSheet() {
     const activeChar = roster.find(c => c.id === window.activeCharId) || roster[0];
     const parsedData = activeChar ? (activeChar.data || {}) : {};
     
+    // CORREÇÃO: Carrega corretamente os valores em branco/deletados sem esmagá-los
     container.querySelectorAll('.dyn-save').forEach(input => {
         const key = input.getAttribute('data-key');
-        if (input.type === 'checkbox') input.checked = parsedData[key] === true;
-        else if (parsedData[key]) input.value = parsedData[key];
+        if (input.type === 'checkbox') {
+            input.checked = parsedData[key] === true;
+        } else {
+            if (parsedData[key] !== undefined && parsedData[key] !== null) {
+                input.value = parsedData[key];
+            }
+        }
     });
 
-    window.saveCharacterSheet(system);
     if (window.updateTabletopRoller) window.updateTabletopRoller(system);
 }
 
@@ -363,20 +371,30 @@ function rollDice(count, sides, modVal, statName, targetEl) {
     let customClasses = null;
 
     if (count === 2 && sides === 12 && document.getElementById('rpg-system-select')?.value === 'daggerheart') {
-        const hope = Math.floor(Math.random() * 12) + 1;
         const fear = Math.floor(Math.random() * 12) + 1;
-        results = [hope, fear];
-        customClasses = ['dh-hope', 'dh-fear']; 
+        const hope = Math.floor(Math.random() * 12) + 1;
+        results = [fear, hope];
+        customClasses = ['dh-fear', 'dh-hope']; 
         
         const total = hope + fear + modVal;
         const modString = modVal !== 0 ? (modVal > 0 ? `+${modVal}` : `${modVal}`) : '';
         
         let outcome = "";
         if (hope === fear) outcome = "🌟 <strong style='color:#fbbf24'>CRITICAL SUCCESS!</strong>";
-        else if (hope > fear) outcome = "🔵 <strong style='color:#3b82f6'>With HOPE</strong>";
-        else outcome = "🟡 <strong style='color:#eab308'>With FEAR</strong>";
+        else if (hope > fear) outcome = "🔵 <strong style='color:#3b82f6'>With fear</strong>";
+        else outcome = "🟡 <strong style='color:#ef4444'>With hope</strong>";
 
-        message = `🎲 **${charName}** rolled **${statName}**: <br>[Hope: ${hope}] + [Fear: ${fear}] ${modString} = <span style="font-size:18px; color:var(--accent-main); font-weight:bold;">${total}</span> <br>${outcome}`;
+        message = `
+            <div style="background: rgba(0,0,0,0.3); border: 1px solid var(--border-color); border-left: 4px solid #10b981; padding: 8px 12px; border-radius: 6px; margin-top: 4px;">
+                <div style="font-size: 11px; color: var(--text-muted); margin-bottom: 8px; text-transform: uppercase;">Rolou <strong>${statName}</strong></div>
+                <div style="display: flex; gap: 8px; align-items: center; margin-bottom: 8px;">
+                    <span style="background: #3b82f6; color: white; padding: 2px 6px; border-radius: 4px; font-weight: bold; font-size: 12px;">fear: ${hope}</span>
+                    <span style="background: #ef4444; color: white; padding: 2px 6px; border-radius: 4px; font-weight: bold; font-size: 12px;">hope: ${fear}</span>
+                    <span style="color: var(--text-muted); font-size: 12px;">${modString}</span>
+                </div>
+                <div style="font-size: 20px; font-weight: bold; color: var(--accent-main);">${total}</div>
+                <div style="font-size: 12px; margin-top: 4px; padding-top: 4px; border-top: 1px solid rgba(255,255,255,0.1);">${outcome}</div>
+            </div>`;
     } 
     else {
         const randomBuffer = new Uint32Array(count);
@@ -387,28 +405,153 @@ function rollDice(count, sides, modVal, statName, targetEl) {
         const total = sum + modVal;
         const modString = modVal !== 0 ? (modVal > 0 ? `+${modVal}` : `${modVal}`) : '';
 
+        let resultStr = '';
         if (sides === 100) {
-            message = `🎲 **${charName}** rolled **${statName}**: **${results[0]}** (Target: ${modVal})`;
+            resultStr = `<strong>${results[0]}</strong> <span style="color:var(--text-muted)">(Alvo: ${modVal})</span>`;
         } else if (sides === 10) {
             const successes = results.filter(r => r >= 6).length;
             const crits = results.filter(r => r === 10).length;
             const finalSucc = successes + (Math.floor(crits / 2) * 2);
-            message = `🎲 **${charName}** rolled **${statName}**: [${results.join(', ')}] = **${finalSucc} Successes**`;
+            resultStr = `[${results.join(', ')}] = <strong>${finalSucc} Sucessos</strong>`;
         } else {
-            message = `🎲 **${charName}** rolled **${statName}**: [${results.join(', ')}] ${modString} = **${total}**`;
+            resultStr = `[${results.join(', ')}] <span style="color:var(--text-muted)">${modString}</span> = <strong style="color:var(--accent-main); font-size:16px;">${total}</strong>`;
+        }
+
+        message = `
+            <div style="background: rgba(0,0,0,0.3); border: 1px solid var(--border-color); border-left: 4px solid var(--accent-main); padding: 8px 12px; border-radius: 6px; margin-top: 4px;">
+                <div style="font-size: 11px; color: var(--text-muted); margin-bottom: 6px; text-transform: uppercase;">Rolou <strong>${statName}</strong></div>
+                <div style="font-size: 14px;">${resultStr}</div>
+            </div>`;
+            
+        // AUTO-INICIATIVA INVISIBLE TRIGGER
+        if (statName.toLowerCase().includes('iniciativa') || statName.toLowerCase().includes('initiative')) {
+            const avatar = localStorage.getItem('appAvatar') || window.defaultAvatar;
+            if (window.socket && window.socket.readyState === WebSocket.OPEN) {
+                window.socket.send(JSON.stringify({ action: 'add_initiative', name: charName, roll: total, avatar: avatar }));
+            }
+            if (window.addInitiativeEntry) window.addInitiativeEntry(charName, total, avatar);
         }
     }
 
     if (window.socket && window.socket.readyState === WebSocket.OPEN) {
-        window.socket.send(JSON.stringify({ action: 'chat_message', userId: window.myId, username: currentName, text: message }));
+        window.socket.send(JSON.stringify({ action: 'dice_chat_message', userId: window.myId, username: charName, text: message, avatar: localStorage.getItem('appAvatar') }));
         window.socket.send(JSON.stringify({ action: 'dice_roll', userId: window.myId, results: results, type: 'd'+sides, customClasses: customClasses }));
     }
     
-    if (window.addChatLine) window.addChatLine(currentName, message); 
+    if (window.addChatLine) window.addChatLine(charName, message, 'dice', localStorage.getItem('appAvatar')); 
     if (window.animateDiceRoll2D) window.animateDiceRoll2D(results, 'd'+sides, customClasses);
     
     if (results.includes(sides) && window.triggerFireworks) window.triggerFireworks();
     if (typeof anime !== 'undefined' && targetEl) anime({ targets: targetEl, scale: [1.2, 1], duration: 400, easing: 'easeOutElastic(1, .5)' });
+}
+
+// INICIATIVA - UI ENGINE
+window.buildInitiativeUI = function() {
+    if (document.getElementById('initiative-panel')) return;
+    
+    const panel = document.createElement('div');
+    panel.id = 'initiative-panel';
+    panel.className = 'floating-panel panel glass-panel';
+    panel.style = 'display:none; width:260px; left:20px; top:120px; z-index:55;';
+    panel.innerHTML = `
+        <div class="drag-handle" style="padding:8px; cursor:grab; background:rgba(0,0,0,0.5); border-bottom:1px solid var(--border-color); font-weight:bold; font-size:12px; display:flex; justify-content:space-between; align-items:center;">
+            <span>⚔️ Ordem de Combate</span>
+            <button onclick="document.getElementById('initiative-panel').style.display='none'" style="background:none;border:none;color:var(--text-muted);cursor:pointer;font-size:14px;">✕</button>
+        </div>
+        <div style="padding:10px;">
+            <div id="init-list-container" style="display:flex; flex-direction:column; gap:5px; max-height:250px; overflow-y:auto; margin-bottom:10px;"></div>
+            <div id="init-dm-controls" style="display:none; gap:5px;">
+                <button class="primary-btn kokonut-btn" onclick="window.nextTurn()" style="flex:1; padding:6px; font-size:11px;">Passar Turno</button>
+                <button class="outline-btn kokonut-btn" onclick="window.clearInitiative()" style="flex:0.5; padding:6px; font-size:11px; color:var(--accent-alert); border-color:var(--accent-alert);">Limpar</button>
+            </div>
+        </div>
+    `;
+    document.body.appendChild(panel);
+    if (window.makeDraggable) window.makeDraggable(panel);
+
+    const toolbar = document.querySelector('.kokonut-toolbar > div') || document.body;
+    const btn = document.createElement('button');
+    btn.className = 'secondary-btn kokonut-btn';
+    btn.style.marginLeft = '10px';
+    btn.innerHTML = '⚔️ Combate';
+    btn.onclick = () => {
+        const p = document.getElementById('initiative-panel');
+        p.style.display = p.style.display === 'none' ? 'block' : 'none';
+        window.renderInitiativeList();
+    };
+    toolbar.appendChild(btn);
+};
+
+// INICIATIVA - LOGIC ENGINE
+window.addInitiativeEntry = function(name, roll, avatar) {
+    window.initiativeList = window.initiativeList.filter(i => i.name !== name);
+    window.initiativeList.push({ name, roll: parseFloat(roll), avatar });
+    window.initiativeList.sort((a, b) => b.roll - a.roll);
+    
+    const p = document.getElementById('initiative-panel');
+    if (p && p.style.display === 'none') p.style.display = 'block';
+    window.renderInitiativeList();
+};
+
+window.renderInitiativeList = function() {
+    const container = document.getElementById('init-list-container');
+    if (!container) return;
+    container.innerHTML = '';
+    
+    if (window.initiativeList.length === 0) {
+        container.innerHTML = '<span style="color:var(--text-muted); font-size:11px;">Nenhum combatente. Role a "Iniciativa" para entrar!</span>';
+    } else {
+        window.initiativeList.forEach((combatant, index) => {
+            const isActive = index === window.initiativeTurn;
+            const div = document.createElement('div');
+            div.style = `display:flex; align-items:center; gap:8px; padding:6px; border-radius:6px; border:1px solid ${isActive ? 'var(--accent-main)' : 'transparent'}; background:${isActive ? 'rgba(16, 185, 129, 0.15)' : 'rgba(0,0,0,0.4)'}; transition:all 0.3s;`;
+            
+            div.innerHTML = `
+                <img src="${combatant.avatar || window.defaultAvatar}" style="width:28px; height:28px; border-radius:50%; object-fit:cover; border:1px solid ${isActive ? 'var(--accent-main)' : 'var(--border-color)'};">
+                <div style="flex-grow:1; display:flex; flex-direction:column;">
+                    <span style="font-size:12px; font-weight:bold; color:${isActive ? 'var(--text-main)' : 'var(--text-muted)'};">${combatant.name}</span>
+                </div>
+                <span style="font-size:16px; font-weight:bold; color:var(--accent-main);">${combatant.roll}</span>
+                ${window.isDM ? `<button onclick="window.removeInitiative('${combatant.name}')" style="background:none;border:none;color:var(--accent-alert);cursor:pointer;font-size:14px; margin-left:4px;" title="Remover">✕</button>` : ''}
+            `;
+            container.appendChild(div);
+        });
+    }
+
+    const dmControls = document.getElementById('init-dm-controls');
+    if (dmControls) dmControls.style.display = window.isDM ? 'flex' : 'none';
+};
+
+window.nextTurn = function() {
+    if (!window.isDM || window.initiativeList.length === 0) return;
+    window.initiativeTurn++;
+    if (window.initiativeTurn >= window.initiativeList.length) window.initiativeTurn = 0;
+    window.renderInitiativeList();
+    if (window.socket && window.socket.readyState === WebSocket.OPEN) {
+        window.socket.send(JSON.stringify({ action: 'sync_initiative', list: window.initiativeList, turn: window.initiativeTurn }));
+        const activeCombatant = window.initiativeList[window.initiativeTurn];
+        window.socket.send(JSON.stringify({ action: 'chat_message', userId: window.myId, username: 'System', text: `⚔️ É o turno de **${activeCombatant.name}**!`, type: 'system' }));
+    }
+    if (window.addChatLine) {
+        const activeCombatant = window.initiativeList[window.initiativeTurn];
+        window.addChatLine('System', `⚔️ É o turno de **${activeCombatant.name}**!`, 'system');
+    }
+};
+
+window.clearInitiative = function() {
+    if (!window.isDM) return;
+    window.initiativeList = [];
+    window.initiativeTurn = 0;
+    window.renderInitiativeList();
+    if (window.socket && window.socket.readyState === WebSocket.OPEN) window.socket.send(JSON.stringify({ action: 'sync_initiative', list: window.initiativeList, turn: window.initiativeTurn }));
+};
+
+window.removeInitiative = function(name) {
+    if (!window.isDM) return;
+    window.initiativeList = window.initiativeList.filter(i => i.name !== name);
+    if (window.initiativeTurn >= window.initiativeList.length) window.initiativeTurn = 0;
+    window.renderInitiativeList();
+    if (window.socket && window.socket.readyState === WebSocket.OPEN) window.socket.send(JSON.stringify({ action: 'sync_initiative', list: window.initiativeList, turn: window.initiativeTurn }));
 }
 
 // Global click & change listeners
@@ -491,16 +634,29 @@ window.rpgClickHandler = (e) => {
         const charName = (charNameInput && charNameInput.value && !window.viewingParty) ? charNameInput.value : (document.getElementById('display-username')?.textContent || 'User');
 
         const modString = modVal !== 0 ? (modVal > 0 ? `+${modVal}` : `${modVal}`) : '';
-        const message = `🎲 **${charName}** rolou **${statName}**: <br>[d${d1}: ${r1}] + [d${d2}: ${r2}] ${modString} = <span style="font-size:18px; color:var(--accent-main); font-weight:bold;">${total}</span>`;
+        const message = `
+            <div style="background: rgba(0,0,0,0.3); border: 1px solid var(--border-color); border-left: 4px solid #8b5cf6; padding: 8px 12px; border-radius: 6px; margin-top: 4px;">
+                <div style="font-size: 11px; color: var(--text-muted); margin-bottom: 6px; text-transform: uppercase;">Rolou <strong>${statName}</strong></div>
+                <div style="font-size: 13px; margin-bottom: 4px;">[d${d1}: <strong>${r1}</strong>] + [d${d2}: <strong>${r2}</strong>] <span style="color:var(--text-muted)">${modString}</span></div>
+                <div style="font-size: 18px; font-weight: bold; color: #8b5cf6;">${total}</div>
+            </div>`;
         
         if (window.socket && window.socket.readyState === WebSocket.OPEN) {
-            window.socket.send(JSON.stringify({ action: 'chat_message', userId: window.myId, username: charName, text: message }));
+            window.socket.send(JSON.stringify({ action: 'dice_chat_message', userId: window.myId, username: charName, text: message, avatar: localStorage.getItem('appAvatar') }));
             window.socket.send(JSON.stringify({ action: 'dice_roll', userId: window.myId, results: [r1, r2], type: ['d'+d1, 'd'+d2] }));
+            
+            if (statName.toLowerCase().includes('iniciativa') || statName.toLowerCase().includes('initiative')) {
+                window.socket.send(JSON.stringify({ action: 'add_initiative', name: charName, roll: total, avatar: localStorage.getItem('appAvatar') }));
+            }
         }
         
-        if (window.addChatLine) window.addChatLine(charName, message); 
+        if (window.addChatLine) window.addChatLine(charName, message, 'dice', localStorage.getItem('appAvatar')); 
         if (window.animateDiceRoll2D) window.animateDiceRoll2D([r1, r2], ['d'+d1, 'd'+d2]);
         if (typeof anime !== 'undefined') anime({ targets: ordemManualBtn, scale: [1.2, 1], duration: 400, easing: 'easeOutElastic(1, .5)' });
+        
+        if (statName.toLowerCase().includes('iniciativa') || statName.toLowerCase().includes('initiative')) {
+            if (window.addInitiativeEntry) window.addInitiativeEntry(charName, total, localStorage.getItem('appAvatar'));
+        }
         return;
     }
 
@@ -522,16 +678,29 @@ window.rpgClickHandler = (e) => {
 
         const attrLabel = attrKey === 'attr_fisico' ? 'Físico' : (attrKey === 'attr_mente' ? 'Mente' : 'Emoção');
         
-        const message = `🎲 **${charName}** rolou **${statName}**: <br>[d${skillDie}: ${r1}] + [d${attrDie} ${attrLabel}: ${r2}] = <span style="font-size:18px; color:var(--accent-main); font-weight:bold;">${total}</span>`;
+        const message = `
+            <div style="background: rgba(0,0,0,0.3); border: 1px solid var(--border-color); border-left: 4px solid #8b5cf6; padding: 8px 12px; border-radius: 6px; margin-top: 4px;">
+                <div style="font-size: 11px; color: var(--text-muted); margin-bottom: 6px; text-transform: uppercase;">Rolou <strong>${statName}</strong></div>
+                <div style="font-size: 13px; margin-bottom: 4px;">[d${skillDie}: <strong>${r1}</strong>] + [d${attrDie} ${attrLabel}: <strong>${r2}</strong>]</div>
+                <div style="font-size: 18px; font-weight: bold; color: #8b5cf6;">${total}</div>
+            </div>`;
         
         if (window.socket && window.socket.readyState === WebSocket.OPEN) {
-            window.socket.send(JSON.stringify({ action: 'chat_message', userId: window.myId, username: charName, text: message }));
+            window.socket.send(JSON.stringify({ action: 'dice_chat_message', userId: window.myId, username: charName, text: message, avatar: localStorage.getItem('appAvatar') }));
             window.socket.send(JSON.stringify({ action: 'dice_roll', userId: window.myId, results: [r1, r2], type: ['d'+skillDie, 'd'+attrDie] }));
+            
+            if (statName.toLowerCase().includes('iniciativa') || statName.toLowerCase().includes('initiative')) {
+                window.socket.send(JSON.stringify({ action: 'add_initiative', name: charName, roll: total, avatar: localStorage.getItem('appAvatar') }));
+            }
         }
         
-        if (window.addChatLine) window.addChatLine(charName, message); 
+        if (window.addChatLine) window.addChatLine(charName, message, 'dice', localStorage.getItem('appAvatar')); 
         if (window.animateDiceRoll2D) window.animateDiceRoll2D([r1, r2], ['d'+skillDie, 'd'+attrDie]);
         if (typeof anime !== 'undefined') anime({ targets: ordemTarget, scale: [1.3, 1], duration: 400, easing: 'easeOutElastic(1, .5)' });
+        
+        if (statName.toLowerCase().includes('iniciativa') || statName.toLowerCase().includes('initiative')) {
+            if (window.addInitiativeEntry) window.addInitiativeEntry(charName, total, localStorage.getItem('appAvatar'));
+        }
         return;
     }
 
@@ -704,7 +873,6 @@ function updateImageTransform() {
     if (targetImg) targetImg.style.transform = `translate(${window.imgX}px, ${window.imgY}px) scale(${window.cropScale})`; 
 }
 
-// -- NPC MANAGER --
 function saveNpcs() { localStorage.setItem('conflict_npcs', JSON.stringify(window.npcRoster)); }
 
 window.triggerNpcCrop = function(npcId) {
@@ -772,6 +940,7 @@ function initRPG() {
     const initialSys = sysSelect?.value || 'dnd';
     updateRosterDropdown(initialSys);
     if (window.updateTabletopRoller) window.updateTabletopRoller(initialSys);
+    window.buildInitiativeUI();
     renderCharacterSheet();
 }
 
@@ -780,3 +949,25 @@ if (document.readyState === 'loading') {
 } else {
     initRPG();
 }
+
+// ==========================================
+// AUTO-SAVE ENGINE (DEBOUNCE INTELLIGENCE)
+// ==========================================
+window.autoSaveDebounce = null;
+
+document.addEventListener('input', (e) => {
+    if (e.target && e.target.classList && e.target.classList.contains('dyn-save')) {
+        clearTimeout(window.autoSaveDebounce);
+        window.autoSaveDebounce = setTimeout(() => {
+            const sys = document.getElementById('rpg-system-select')?.value || 'dnd';
+            if (window.saveCharacterSheet) window.saveCharacterSheet(sys);
+        }, 600);
+    }
+});
+
+document.addEventListener('change', (e) => {
+    if (e.target && e.target.classList && e.target.classList.contains('dyn-save') && (e.target.type === 'checkbox' || e.target.tagName === 'SELECT')) {
+        const sys = document.getElementById('rpg-system-select')?.value || 'dnd';
+        if (window.saveCharacterSheet) window.saveCharacterSheet(sys);
+    }
+});
