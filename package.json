@@ -1,6 +1,6 @@
 {
   "name": "conflict",
-  "version": "1.7.0",
+  "version": "1.17.2",
   "description": "Secure P2P Comms & Media",
   "author": "YourName",
   "main": "js/main.js",
@@ -9,6 +9,7 @@
     "build": "electron-builder --win"
   },
   "dependencies": {
+    "@3d-dice/dice-box": "^1.1.4",
     "@sapphi-red/web-noise-suppressor": "^0.4.0",
     "electron-updater": "^6.8.9",
     "localtunnel": "^2.0.2",

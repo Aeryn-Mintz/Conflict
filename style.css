@@ -651,7 +651,7 @@ body { background-image: radial-gradient(circle at top right, rgba(16, 185, 129,
     pointer-events: none;
     
     /* Fast, bouncy curve */
-    animation: tumbleFluid 1.2s cubic-bezier(0.2, 0.8, 0.2, 1) forwards;
+    animation: tumbleFluid 1.2s cubic-bezier(0.2, 0.8, 0.2, 1) both;
     transition: all 0.5s ease;
 }
 

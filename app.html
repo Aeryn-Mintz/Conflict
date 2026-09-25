@@ -299,6 +299,10 @@
                             <div>
                                 <label class="config-label" style="font-size: 12px; color: var(--text-muted);">Webcam:</label>
                                 <select id="video-in-select" class="config-select kokonut-select" style="width: 100%; margin-top: 3px;"></select>
+                                <div style="margin-top: 10px;">
+                                <label class="config-label" style="font-size: 12px; color: var(--text-muted);">Noise Gate Cutoff:</label>
+                                <input type="range" id="noise-gate-slider" class="kokonut-slider" min="0" max="0.1" step="0.001" value="0.01" style="width: 100%; margin-top: 3px;" title="Increase if keyboard is heard, decrease if voice cuts out">
+                            </div>
                             </div>
                             
                             <button id="refresh-devices-btn" class="outline-btn kokonut-btn" style="margin-top: auto; width: 100%; padding: 6px;">🔄 Refresh Devices</button>
@@ -354,5 +358,12 @@
     <script src="js/media.js"></script>
     <script src="js/vtt.js"></script>
     <script src="js/rpg.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@3d-dice/dice-box@1.1.9/dist/dice-box.min.js"></script>
+    <script>
+    window.diceBox = new DiceBox("#dice-layer", {
+        assetPath: "https://cdn.jsdelivr.net/npm/@3d-dice/dice-box@1.1.9/public/assets/",
+        theme: "default", scale: 6
+    });
+    </script>
 </body>
 </html>
