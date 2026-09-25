@@ -198,33 +198,50 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     });
 
-    async function loadDevices() {
+async function loadDevices() {
+    try {
+        // Trigger permissions once, then immediately release the streams
+        // so the device LEDs turn off and the enumerate call returns full labels.
         try {
-            try { await navigator.mediaDevices.getUserMedia({ audio: true }); } catch(e) {}
-            try { await navigator.mediaDevices.getUserMedia({ video: true }); } catch(e) {}
-            
-            const devices = await navigator.mediaDevices.enumerateDevices();
-            const audioIn = document.getElementById('audio-in-select'); 
-            const audioOut = document.getElementById('audio-out-select'); 
-            const videoIn = document.getElementById('video-in-select');
-            if(audioIn) audioIn.innerHTML = ''; 
-            if(audioOut) audioOut.innerHTML = ''; 
-            if(videoIn) videoIn.innerHTML = '';
-            
-            devices.forEach(device => {
-                const opt = document.createElement('option'); 
-                opt.value = device.deviceId; 
-                opt.text = device.label || `${device.kind} (${device.deviceId.slice(0,5)}...)`;
-                if (device.kind === 'audioinput' && audioIn) audioIn.appendChild(opt); 
-                else if (device.kind === 'audiooutput' && audioOut) audioOut.appendChild(opt); 
-                else if (device.kind === 'videoinput' && videoIn) videoIn.appendChild(opt);
-            });
-            
-            if (audioIn && localStorage.getItem('appAudioIn')) audioIn.value = localStorage.getItem('appAudioIn');
-            if (audioOut && localStorage.getItem('appAudioOut')) audioOut.value = localStorage.getItem('appAudioOut');
-            if (videoIn && localStorage.getItem('appVideoIn')) videoIn.value = localStorage.getItem('appVideoIn');
-        } catch (e) {}
+            const probe = await navigator.mediaDevices.getUserMedia({ audio: true, video: true });
+            probe.getTracks().forEach(t => t.stop());
+        } catch (e) {
+            try { const a = await navigator.mediaDevices.getUserMedia({ audio: true }); a.getTracks().forEach(t => t.stop()); } catch(e2) {}
+            try { const v = await navigator.mediaDevices.getUserMedia({ video: true }); v.getTracks().forEach(t => t.stop()); } catch(e2) {}
+        }
+
+        const devices = await navigator.mediaDevices.enumerateDevices();
+        const audioIn  = document.getElementById('audio-in-select');
+        const audioOut = document.getElementById('audio-out-select');
+        const videoIn  = document.getElementById('video-in-select');
+        if (audioIn)  audioIn.innerHTML  = '';
+        if (audioOut) audioOut.innerHTML = '';
+        if (videoIn)  videoIn.innerHTML  = '';
+
+        let micCount = 0, outCount = 0, camCount = 0;
+        devices.forEach(device => {
+            const opt = document.createElement('option');
+            opt.value = device.deviceId;
+            opt.text = device.label || `${device.kind} (${device.deviceId.slice(0,5) || 'unknown'}…)`;
+            if (device.kind === 'audioinput' && audioIn)  { audioIn.appendChild(opt);  micCount++; }
+            else if (device.kind === 'audiooutput' && audioOut) { audioOut.appendChild(opt); outCount++; }
+            else if (device.kind === 'videoinput' && videoIn)   { videoIn.appendChild(opt);  camCount++; }
+        });
+
+        // Restore saved picks — but only if that device still exists
+        const restore = (el, key) => {
+            const saved = localStorage.getItem(key);
+            if (el && saved && Array.from(el.options).some(o => o.value === saved)) el.value = saved;
+        };
+        restore(audioIn, 'appAudioIn');
+        restore(audioOut, 'appAudioOut');
+        restore(videoIn, 'appVideoIn');
+
+        console.log(`[Devices] mic=${micCount} out=${outCount} cam=${camCount}`);
+    } catch (e) {
+        console.error("loadDevices failed:", e);
     }
+}
 
     const configView = document.getElementById('config-view');
     document.getElementById('settings-btn')?.addEventListener('click', () => { 
@@ -264,6 +281,10 @@ document.addEventListener('DOMContentLoaded', () => {
         if (audioIn) localStorage.setItem('appAudioIn', audioIn); 
         if (audioOut) localStorage.setItem('appAudioOut', audioOut); 
         if (videoIn) localStorage.setItem('appVideoIn', videoIn);
+        
+        // NOISE GATE SAVE
+        const gateVal = document.getElementById('noise-gate-slider')?.value;
+        if (gateVal) localStorage.setItem('appNoiseGate', gateVal);
 
         const bg = document.getElementById('color-bg')?.value || '#050a06'; 
         const panel = document.getElementById('color-panel')?.value || '#0a140c'; 
@@ -284,7 +305,49 @@ document.addEventListener('DOMContentLoaded', () => {
         localStorage.setItem('themeText', text); 
         localStorage.setItem('themeAccent', accent);
 
-        if (configView) configView.style.display = 'none';
+                if (configView) configView.style.display = 'none';
+
+        // ---- HOT-SWAP ACTIVE STREAMS ----
+        (async () => {
+if (window.localMicStream && audioIn) {
+    try {
+        localStorage.setItem('appAudioIn', audioIn);
+        await window.rebuildMicPipeline();
+        if (window.addChatLine) window.addChatLine('System', '🎙️ Microphone switched (suppression preserved).', 'system');
+    } catch (err) {
+        console.warn("Mic rebuild failed:", err);
+        if (window.addChatLine) window.addChatLine('System', '⚠️ Could not switch microphone.', 'system');
+    }
+}
+
+            // Webcam — swap in place if the camera is on
+            if (window.localCamStream && videoIn) {
+                try {
+                    const oldCamTrack = window.localCamStream.getVideoTracks()[0];
+                    const newCam = await navigator.mediaDevices.getUserMedia({
+                        video: { deviceId: { exact: videoIn } }
+                    }).catch(() => navigator.mediaDevices.getUserMedia({
+                        video: { deviceId: { ideal: videoIn } }
+                    }));
+                    const newTrack = newCam.getVideoTracks()[0];
+                    Object.values(window.peers).forEach(pc => {
+                        const sender = pc.getSenders().find(s => s.track === oldCamTrack);
+                        if (sender) sender.replaceTrack(newTrack);
+                    });
+                    window.localCamStream.getTracks().forEach(t => t.stop());
+                    window.localCamStream = newCam;
+                    const localCam = document.getElementById('local-cam-video');
+                    if (localCam) localCam.srcObject = newCam;
+                } catch (err) { console.warn("Cam swap failed:", err); }
+            }
+
+            // Audio output — re-apply sink to every remote <audio> element
+            if (audioOut) {
+                document.querySelectorAll('[id^="audio-"]').forEach(a => {
+                    if (typeof a.setSinkId === 'function') a.setSinkId(audioOut).catch(()=>{});
+                });
+            }
+        })();
     });
 
     document.getElementById('reset-theme-btn')?.addEventListener('click', () => {
@@ -364,6 +427,11 @@ document.addEventListener('DOMContentLoaded', () => {
         const ua = document.getElementById('user-avatar'); if(ua) ua.src = savedAvatar; 
         const cap = document.getElementById('config-avatar-preview'); if(cap) cap.src = savedAvatar; 
     }
+    
+    // --- NOISE GATE INIT ---
+    const savedGate = localStorage.getItem('appNoiseGate');
+    const gateSlider = document.getElementById('noise-gate-slider');
+    if (savedGate && gateSlider) gateSlider.value = savedGate;
 
     // --- VIBEY THEME INITIALIZATION ---
     const savedBg = localStorage.getItem('themeBg') || '#050a06'; 

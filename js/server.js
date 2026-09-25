@@ -8,6 +8,9 @@ let wss = null;
 let server = null;
 let mqttClient = null;
 
+// NEW: Tracks outbound payloads to catch and drop the incoming echo
+const recentMessages = new Set();
+
 function startLocalServer(baseDir) {
     server = http.createServer((req, res) => {
         let filePath = path.join(baseDir, req.url === '/' ? 'index.html' : req.url);
@@ -31,12 +34,17 @@ function startLocalServer(baseDir) {
         ws.on('message', (msg) => {
             const msgStr = msg.toString();
             
-            // 1. Send locally to your UI
+            // 1. Memorize this payload so we can ignore the echo when it comes back
+            recentMessages.add(msgStr);
+            // Clear memory after 3 seconds (plenty of time for the echo to bounce back)
+            setTimeout(() => recentMessages.delete(msgStr), 3000);
+            
+            // 2. Send locally to your UI
             wss.clients.forEach(client => { 
                 if (client !== ws && client.readyState === WebSocket.OPEN) client.send(msgStr); 
             });
             
-            // 2. Blast it across the internet to your friends
+            // 3. Blast it across the internet to your friends
             if (mqttClient && mqttClient.connected) {
                 mqttClient.publish(mqttClient.roomTopic, msgStr);
             }
@@ -65,10 +73,14 @@ async function joinSwarmRoom(roomCode) {
             });
         });
 
-        // When your friend sends data, route it back into your local UI
+        // When data arrives from the broker
         mqttClient.on('message', (receivedTopic, message) => {
             if (receivedTopic === topic && wss) {
                 const msgStr = message.toString();
+                
+                // NEW: If we sent this exact message moments ago, it's our own echo. Drop it!
+                if (recentMessages.has(msgStr)) return;
+
                 wss.clients.forEach(client => { 
                     if (client.readyState === WebSocket.OPEN) client.send(msgStr); 
                 });

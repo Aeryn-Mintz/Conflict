@@ -331,36 +331,75 @@ window.updateTabletopRoller = function(system) {
     }
 };
 
-window.animateDiceRoll2D = function(results, diceTypeArray, customClasses) {
-    const layer = document.getElementById('dice-layer');
-    if (!layer) return;
-    
-    results.forEach((res, i) => {
-        let currentDiceType = Array.isArray(diceTypeArray) ? diceTypeArray[i] : diceTypeArray;
-        if (!currentDiceType || currentDiceType === 'd') currentDiceType = 'd20';
-
-        const diceEl = document.createElement('div');
-        let cClass = '';
-        if (Array.isArray(customClasses)) cClass = customClasses[i] || '';
-        else if (customClasses) cClass = customClasses;
-
-        diceEl.className = `die-2d shape-${currentDiceType} ${cClass}`;
-        
-        const tx = (Math.random() * 400 - 200) + 'px';
-        const ty = (Math.random() * 400 - 200) + 'px';
-        diceEl.style.setProperty('--tx', tx);
-        diceEl.style.setProperty('--ty', ty);
-        
-        diceEl.innerHTML = `<span>${res}</span>`;
-        layer.appendChild(diceEl);
-        
-        setTimeout(() => {
-            diceEl.style.opacity = '0';
-            setTimeout(() => diceEl.remove(), 500);
-        }, 3500);
+window.triggerFireworks = function() {
+    if (typeof confetti === 'undefined') return;
+    confetti({
+        particleCount: 120,
+        spread: 80,
+        origin: { y: 0.6 },
+        colors: ['#10b981', '#fbbf24', '#ef4444', '#3b82f6']
     });
 };
 
+window.animateDiceRoll2D = function(results, diceTypeArray, customClasses) {
+    const diceLayer = document.getElementById('dice-layer');
+    if (!diceLayer) return;
+
+    // Optional: if you later load @3d-dice/dice-box, this branch will take over
+    if (window.diceBox && typeof window.diceBox.roll === 'function') {
+        const notationArray = results.map((res, i) => {
+            let t = Array.isArray(diceTypeArray) ? diceTypeArray[i] : diceTypeArray;
+            if (!t || t === 'd') t = 'd20';
+            const sides = parseInt(t.replace(/\D/g, '')) || 20;
+            let color = '#10b981';
+            const cClass = Array.isArray(customClasses) ? customClasses[i] : customClasses;
+            if (cClass && cClass.includes('dh-fear')) color = '#ef4444';
+            if (cClass && cClass.includes('dh-hope')) color = '#3b82f6';
+            return { sides, themeColor: color, value: res };
+        });
+        window.diceBox.roll(notationArray);
+        return;
+    }
+
+    // 2D fallback using the existing CSS
+    const validShapes = [4, 6, 8, 10, 12, 20, 100];
+
+    results.forEach((res, i) => {
+        let type = Array.isArray(diceTypeArray) ? diceTypeArray[i] : diceTypeArray;
+        if (!type || type === 'd') type = 'd20';
+        const sides = parseInt(type.replace(/\D/g, '')) || 20;
+
+        const die = document.createElement('div');
+        const shapeClass = validShapes.includes(sides) ? `shape-d${sides}` : 'shape-d20';
+        die.className = `die-2d ${shapeClass}`;
+
+        // Random scatter destination (CSS animation reads --tx/--ty)
+        const tx = (Math.random() - 0.5) * 260;
+        const ty = (Math.random() - 0.5) * 180;
+        die.style.setProperty('--tx', `${tx}px`);
+        die.style.setProperty('--ty', `${ty}px`);
+        die.style.animationDelay = `${i * 0.12}s`;
+
+        // Daggerheart colors
+        const cClass = Array.isArray(customClasses) ? customClasses[i] : customClasses;
+        if (cClass) {
+            if (cClass.includes('dh-fear')) {
+                die.style.background = 'radial-gradient(circle at 30% 30%, #eab308, #854d0e)';
+                die.style.borderColor = '#713f12';
+            }
+            if (cClass.includes('dh-hope')) {
+                die.style.background = 'radial-gradient(circle at 30% 30%, #3b82f6, #1e3a8a)';
+                die.style.borderColor = '#1e3a8a';
+            }
+        }
+
+        die.innerHTML = `<span>${res}</span>`;
+        diceLayer.appendChild(die);
+
+        // Clean up after animation finishes (1.2s animation + delay + buffer)
+        setTimeout(() => die.remove(), 1800 + i * 120);
+    });
+};
 function rollDice(count, sides, modVal, statName, targetEl) {
     const currentName = document.getElementById('display-username')?.textContent || 'User';
     const charNameInput = document.querySelector('input[data-key="name"]');
