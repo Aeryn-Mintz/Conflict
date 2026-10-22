@@ -7,23 +7,44 @@ const mqtt = require('mqtt');
 let wss = null; 
 let server = null;
 let mqttClient = null;
+let currentHostInfo = null;
+let pendingOutboundQueue = [];
 
-// NEW: Tracks outbound payloads to catch and drop the incoming echo
 const recentMessages = new Set();
+const RADAR_QUERY_TOPIC = 'conflict-global-radar-v1/query';
+const RADAR_RESPONSE_TOPIC = 'conflict-global-radar-v1/response';
 
 function startLocalServer(baseDir) {
     server = http.createServer((req, res) => {
-        let filePath = path.join(baseDir, req.url === '/' ? 'index.html' : req.url);
+        let cleanUrl = decodeURIComponent(req.url.split('?')[0]);
+        let relPath = cleanUrl === '/' ? 'index.html' : cleanUrl.replace(/^\/+/, '');
+        let filePath = path.join(baseDir, relPath);
+        let unpackedPath = filePath.replace('app.asar', 'app.asar.unpacked');
+
         let extname = String(path.extname(filePath)).toLowerCase();
-        let mimeTypes = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.png': 'image/png' };
+        let mimeTypes = {
+            '.html': 'text/html; charset=utf-8',
+            '.js': 'text/javascript; charset=utf-8',
+            '.css': 'text/css; charset=utf-8',
+            '.png': 'image/png',
+            '.jpg': 'image/jpeg',
+            '.gif': 'image/gif',
+            '.svg': 'image/svg+xml',
+            '.wasm': 'application/wasm',
+            '.json': 'application/json'
+        };
         
-        fs.readFile(filePath, (error, content) => {
+        const targetFile = fs.existsSync(unpackedPath) ? unpackedPath : filePath;
+
+        fs.readFile(targetFile, (error, content) => {
             if (error) {
                 fs.readFile(path.join(baseDir, 'index.html'), (err, data) => {
-                    res.writeHead(200, { 'Content-Type': 'text/html' }); res.end(data, 'utf-8');
+                    res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
+                    res.end(data);
                 });
             } else {
-                res.writeHead(200, { 'Content-Type': mimeTypes[extname] || 'application/octet-stream' }); res.end(content, 'utf-8');
+                res.writeHead(200, { 'Content-Type': mimeTypes[extname] || 'application/octet-stream' });
+                res.end(content);
             }
         });
     });
@@ -31,22 +52,32 @@ function startLocalServer(baseDir) {
     wss = new WebSocket.Server({ server });
     
     wss.on('connection', (ws) => {
+        if (mqttClient && mqttClient.connected && mqttClient.roomTopic) {
+            ws.send(JSON.stringify({ action: 'room_ready', roomCode: mqttClient.roomCode }));
+        }
+
         ws.on('message', (msg) => {
             const msgStr = msg.toString();
             
-            // 1. Memorize this payload so we can ignore the echo when it comes back
+            try {
+                const parsed = JSON.parse(msgStr);
+                if (currentHostInfo && (parsed.action === 'join' || parsed.action === 'presence')) {
+                    if (parsed.username) currentHostInfo.hostName = parsed.username;
+                    if (parsed.avatar) currentHostInfo.avatar = parsed.avatar;
+                }
+            } catch (e) {}
+
             recentMessages.add(msgStr);
-            // Clear memory after 3 seconds (plenty of time for the echo to bounce back)
-            setTimeout(() => recentMessages.delete(msgStr), 3000);
+            setTimeout(() => recentMessages.delete(msgStr), 2000);
             
-            // 2. Send locally to your UI
             wss.clients.forEach(client => { 
                 if (client !== ws && client.readyState === WebSocket.OPEN) client.send(msgStr); 
             });
             
-            // 3. Blast it across the internet to your friends
-            if (mqttClient && mqttClient.connected) {
-                mqttClient.publish(mqttClient.roomTopic, msgStr);
+            if (mqttClient && mqttClient.connected && mqttClient.roomTopic) {
+                mqttClient.publish(mqttClient.roomTopic, msgStr, { qos: 0 });
+            } else {
+                pendingOutboundQueue.push(msgStr);
             }
         });
     });
@@ -55,30 +86,68 @@ function startLocalServer(baseDir) {
     return { server, wss };
 }
 
-async function joinSwarmRoom(roomCode) {
+async function joinSwarmRoom(roomCode, isHost = false, hostMeta = {}) {
     return new Promise((resolve) => {
-        if (mqttClient) mqttClient.end(); // Clear old rooms
+        if (mqttClient) mqttClient.end(true);
         
-        const topic = `conflict-room-${roomCode.toUpperCase()}`;
-        console.log("Connecting to public broker for room:", roomCode);
+        const cleanCode = roomCode.trim().toUpperCase();
+        const topic = `conflict-room-${cleanCode}`;
         
-        // Connect to a free, massive public messaging broker
-        mqttClient = mqtt.connect('mqtt://broker.emqx.io:1883');
+        currentHostInfo = isHost ? {
+            roomCode: cleanCode,
+            hostName: hostMeta.hostName || 'Host',
+            roomName: hostMeta.roomName || `Sala de ${hostMeta.hostName || 'RPG'}`,
+            avatar: hostMeta.avatar || './Banaya.png',
+            createdAt: Date.now()
+        } : null;
+
+        mqttClient = mqtt.connect('mqtt://broker.emqx.io:1883', {
+            keepalive: 30,
+            reconnectPeriod: 2000
+        });
         mqttClient.roomTopic = topic;
+        mqttClient.roomCode = cleanCode;
 
         mqttClient.on('connect', () => {
-            mqttClient.subscribe(topic, () => {
-                console.log("Successfully joined room:", roomCode);
-                resolve(roomCode); // Instantly resolves, no UI freezing!
+            const topicsToSub = [topic];
+            if (isHost) topicsToSub.push(RADAR_QUERY_TOPIC);
+
+            mqttClient.subscribe(topicsToSub, () => {
+                while (pendingOutboundQueue.length > 0) {
+                    const queuedMsg = pendingOutboundQueue.shift();
+                    mqttClient.publish(topic, queuedMsg);
+                }
+
+                if (wss) {
+                    const readyMsg = JSON.stringify({ action: 'room_ready', roomCode: cleanCode });
+                    wss.clients.forEach(client => {
+                        if (client.readyState === WebSocket.OPEN) client.send(readyMsg);
+                    });
+                }
+
+                resolve(cleanCode);
             });
         });
 
-        // When data arrives from the broker
         mqttClient.on('message', (receivedTopic, message) => {
+            const msgStr = message.toString();
+
+            if (receivedTopic === RADAR_QUERY_TOPIC && currentHostInfo) {
+                try {
+                    const query = JSON.parse(msgStr);
+                    const replyPayload = JSON.stringify({
+                        requesterId: query.requesterId,
+                        roomCode: currentHostInfo.roomCode,
+                        hostName: currentHostInfo.hostName,
+                        roomName: currentHostInfo.roomName,
+                        avatar: currentHostInfo.avatar
+                    });
+                    mqttClient.publish(RADAR_RESPONSE_TOPIC, replyPayload);
+                } catch (e) {}
+                return;
+            }
+
             if (receivedTopic === topic && wss) {
-                const msgStr = message.toString();
-                
-                // NEW: If we sent this exact message moments ago, it's our own echo. Drop it!
                 if (recentMessages.has(msgStr)) return;
 
                 wss.clients.forEach(client => { 
@@ -89,9 +158,54 @@ async function joinSwarmRoom(roomCode) {
     });
 }
 
-function stopServer() {
-    if (server) server.close();
-    if (mqttClient) mqttClient.end();
+function scanOpenRooms(timeoutMs = 2200) {
+    return new Promise((resolve) => {
+        const scannerClient = mqtt.connect('mqtt://broker.emqx.io:1883');
+        const requesterId = Math.random().toString(36).substring(2, 10);
+        const foundRooms = new Map();
+
+        const finish = () => {
+            try { scannerClient.end(true); } catch (e) {}
+            resolve(Array.from(foundRooms.values()));
+        };
+
+        const timer = setTimeout(finish, timeoutMs);
+
+        scannerClient.on('connect', () => {
+            scannerClient.subscribe(RADAR_RESPONSE_TOPIC, () => {
+                scannerClient.publish(RADAR_QUERY_TOPIC, JSON.stringify({
+                    action: 'discover',
+                    requesterId: requesterId
+                }));
+            });
+        });
+
+        scannerClient.on('message', (topic, message) => {
+            if (topic === RADAR_RESPONSE_TOPIC) {
+                try {
+                    const data = JSON.parse(message.toString());
+                    if (data.requesterId === requesterId && data.roomCode) {
+                        foundRooms.set(data.roomCode, {
+                            roomCode: data.roomCode,
+                            hostName: data.hostName || 'Amigo',
+                            roomName: data.roomName || `Sala #${data.roomCode}`,
+                            avatar: data.avatar || './Banaya.png'
+                        });
+                    }
+                } catch (e) {}
+            }
+        });
+
+        scannerClient.on('error', () => {
+            clearTimeout(timer);
+            finish();
+        });
+    });
 }
 
-module.exports = { startLocalServer, stopServer, joinSwarmRoom };
+function stopServer() {
+    if (server) server.close();
+    if (mqttClient) mqttClient.end(true);
+}
+
+module.exports = { startLocalServer, stopServer, joinSwarmRoom, scanOpenRooms };

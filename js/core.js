@@ -7,11 +7,22 @@ if (typeof require !== 'undefined') { window.ipcRenderer = require('electron').i
 window.myId = Math.random().toString(36).substring(2, 15);
 window.peerNames = {};
 window.peerAvatars = {};
+window.peerIps = {};
+window.myVirtualIp = '10.66.0.x';
 window.defaultAvatar = './Banaya.png';
 window.partySheets = {};
 window.viewingParty = false;
 window.isDM = false;
 window.viewingRemoteUid = null;
+
+if (window.ipcRenderer) {
+    window.ipcRenderer.invoke('get-virtual-ip').then(ip => {
+        if (ip) {
+            window.myVirtualIp = ip;
+            if (window.renderConnectedUsers) window.renderConnectedUsers();
+        }
+    }).catch(() => {});
+}
 
 // 1. ELECTRON IPC (AUTO-UPDATER)
 if (window.ipcRenderer) {
@@ -37,12 +48,38 @@ if (!serverUrl) {
 }
 
 window.socket = new WebSocket(serverUrl);
+window.hasAnnouncedJoin = false;
 
-window.socket.onopen = () => {
+window.announceRoomJoin = async function() {
+    if (window.hasAnnouncedJoin || !window.socket || window.socket.readyState !== WebSocket.OPEN) return;
+    window.hasAnnouncedJoin = true;
+
+    if (window.ipcRenderer) {
+        try {
+            const ip = await window.ipcRenderer.invoke('get-virtual-ip');
+            if (ip) window.myVirtualIp = ip;
+        } catch (e) {}
+    }
     const username = document.getElementById('display-username')?.textContent || localStorage.getItem('appUsername') || 'User';
     const avatar = localStorage.getItem('appAvatar') || window.defaultAvatar;
-    window.socket.send(JSON.stringify({ action: 'join', userId: window.myId, username: username, avatar: avatar }));
-    if (window.addChatLine) window.addChatLine('System', 'Connected to the room server.', 'system');
+    window.socket.send(JSON.stringify({
+        action: 'join',
+        userId: window.myId,
+        username: username,
+        avatar: avatar,
+        virtualIp: window.myVirtualIp
+    }));
+    if (window.addChatLine) window.addChatLine('System', `Connected to the room server (LAN IP: ${window.myVirtualIp}).`, 'system');
+};
+
+if (window.ipcRenderer) {
+    window.ipcRenderer.on('n2n-status', () => {
+        if (window.addChatLine) window.addChatLine('System', `🌐 Virtual LAN (${window.myVirtualIp}) ativa e pronta para jogos!`, 'system');
+    });
+}
+
+window.socket.onopen = () => {
+    setTimeout(() => window.announceRoomJoin(), 400);
 };
 
 window.socket.onerror = () => {
@@ -53,20 +90,31 @@ window.socket.onmessage = async (event) => {
     let data;
     try { data = JSON.parse(event.data); } catch (e) { return; }
 
-    if (['offer', 'answer', 'ice-candidate', 'join'].includes(data.action)) {
-        if (window.handleWebRTCSignal) window.handleWebRTCSignal(data);
+    // Rota prioritária de baixa latência para a Ponte de Voz Anti-CGNAT
+    if (data.action === 'voice_frame') {
+        if (window.handleVoiceFrame) window.handleVoiceFrame(data);
+        return;
+    }
+
+    if (data.action === 'room_ready') {
+        window.announceRoomJoin();
+        return;
     }
     
     if (data.action === 'join' && data.userId !== window.myId) {
         window.peerNames[data.userId] = data.username || "Guest";
         window.peerAvatars[data.userId] = data.avatar || window.defaultAvatar;
+        if (data.virtualIp) window.peerIps[data.userId] = data.virtualIp;
         if (window.createPeerConnection && !window.peers[data.userId]) window.createPeerConnection(data.userId);
         if (window.renderConnectedUsers) window.renderConnectedUsers();
         
         window.socket.send(JSON.stringify({
-            action: 'presence', targetId: data.userId, userId: window.myId,
+            action: 'presence',
+            targetId: data.userId,
+            userId: window.myId,
             username: document.getElementById('display-username')?.textContent || localStorage.getItem('appUsername') || 'Guest',
-            avatar: localStorage.getItem('appAvatar') || window.defaultAvatar
+            avatar: localStorage.getItem('appAvatar') || window.defaultAvatar,
+            virtualIp: window.myVirtualIp
         }));
         
         if (window.isDM) {
@@ -75,14 +123,20 @@ window.socket.onmessage = async (event) => {
             if (window.initiativeList && window.initiativeList.length > 0) window.socket.send(JSON.stringify({ action: 'sync_initiative', list: window.initiativeList, turn: window.initiativeTurn }));
         }
     }
-    else if (data.action === 'presence' && data.targetId === window.myId) {
+    else if (data.action === 'presence' && (!data.targetId || data.targetId === window.myId)) {
+        if (data.userId === window.myId) return;
         window.peerNames[data.userId] = data.username || "Guest";
         window.peerAvatars[data.userId] = data.avatar || window.defaultAvatar;
+        if (data.virtualIp) window.peerIps[data.userId] = data.virtualIp;
         if (window.createPeerConnection && !window.peers[data.userId]) window.createPeerConnection(data.userId);
         if (window.renderConnectedUsers) window.renderConnectedUsers();
     }
-    
-    else if (data.action === 'set_campaign_system' && window.applyCampaignSystem) { window.applyCampaignSystem(data.system, false); if(window.addChatLine) window.addChatLine('System', `👑 The DM set the campaign system to **${data.system.toUpperCase()}**.`, 'system'); }
+
+    if (['offer', 'answer', 'ice-candidate', 'join', 'presence'].includes(data.action)) {
+        if (window.handleWebRTCSignal) window.handleWebRTCSignal(data);
+    }
+
+    if (data.action === 'set_campaign_system' && window.applyCampaignSystem) { window.applyCampaignSystem(data.system, false); if(window.addChatLine) window.addChatLine('System', `👑 The DM set the campaign system to **${data.system.toUpperCase()}**.`, 'system'); }
     else if (data.action === 'request_sheets' && window.saveCharacterSheet) window.saveCharacterSheet(document.getElementById('rpg-system-select')?.value || 'dnd');
     else if (data.action === 'sheet_update') { 
         window.partySheets[data.userId] = { username: data.username, system: data.system, charName: data.charName, data: data.data, portrait: data.portrait }; 
@@ -106,7 +160,7 @@ window.socket.onmessage = async (event) => {
     else if (data.action === 'token_add' && data.userId !== window.myId && window.placeTokenOnMap) window.placeTokenOnMap(data.token, false);
     else if (data.action === 'token_move' && data.userId !== window.myId) { const el = document.getElementById('map-token-' + data.tokenId); if (el) { el.style.left = data.x + 'px'; el.style.top = data.y + 'px'; if(window.mapAssets && window.mapAssets[data.tokenId]) { window.mapAssets[data.tokenId].x = data.x; window.mapAssets[data.tokenId].y = data.y; } } }
     else if (data.action === 'token_resize' && data.userId !== window.myId) { const el = document.getElementById('map-token-' + data.tokenId); if (el) { el.style.width = data.w + 'px'; el.style.height = data.h + 'px'; if(window.mapAssets && window.mapAssets[data.tokenId]) { window.mapAssets[data.tokenId].w = data.w; window.mapAssets[data.tokenId].h = data.h; } } }
-    else if (data.action === 'token_zindex' && data.userId !== window.myId) { const el = document.getElementById('map-token-' + data.tokenId); if (el) { el.style.zIndex = data.z; if(window.mapAssets && window.mapAssets[data.tokenId]) window.mapAssets[data.tokenId].z = data.z; } }
+    else if (data.action === 'token_zindex' && data.userId !== window.myId) { const el = document.getElementById('map-token-' + data.tokenId); if (el) { el.style.zIndex = data.z; if(window.mapAssets && window.mapAssets[data.tokenId]) { window.mapAssets[data.tokenId].z = data.z; } } }
     else if (data.action === 'token_hide' && data.userId !== window.myId) { const el = document.getElementById('map-token-' + data.tokenId); if (el && window.mapAssets && window.mapAssets[data.tokenId]) { window.mapAssets[data.tokenId].hidden = data.hidden; if (window.applyVisibility) window.applyVisibility(el, data.hidden); } }
     else if (data.action === 'tokens_clear' && data.userId !== window.myId) { document.getElementById('token-layer').innerHTML = ''; if (window.mapAssets) window.mapAssets = {}; }
     else if (data.action === 'token_remove' && data.userId !== window.myId) { const el = document.getElementById('map-token-' + data.tokenId); if (el) el.remove(); if(window.mapAssets) delete window.mapAssets[data.tokenId]; }
@@ -159,15 +213,31 @@ window.renderConnectedUsers = function() {
     
     const localRow = document.createElement('div');
     localRow.className = 'user-card kokonut-card';
-    localRow.style.display = 'flex'; localRow.style.justifyContent = 'space-between'; localRow.style.alignItems = 'center'; localRow.style.padding = '8px';
-    localRow.innerHTML = `<div style="display:flex; align-items:center; gap:10px;"><img src="${myAvatar}" style="width:30px; height:30px; border-radius:50%; object-fit:cover; border:2px solid var(--accent-main);"><span style="font-size:13px; font-weight:bold; color: var(--accent-main);">${myName} (You)</span></div>`;
+    localRow.style.cssText = 'display:flex; justify-content:space-between; align-items:center; padding:8px;';
+    localRow.innerHTML = `
+        <div style="display:flex; align-items:center; gap:10px;">
+            <img src="${myAvatar}" style="width:30px; height:30px; border-radius:50%; object-fit:cover; border:2px solid var(--accent-main);">
+            <div>
+                <div style="font-size:13px; font-weight:bold; color: var(--accent-main);">${myName} (You)</div>
+                <div style="font-size:10px; font-family:monospace; color:var(--text-muted); cursor:pointer;" onclick="navigator.clipboard.writeText('${window.myVirtualIp}')" title="Click to copy your LAN IP">🌐 ${window.myVirtualIp} 📋</div>
+            </div>
+        </div>`;
     listEl.appendChild(localRow);
 
     userIds.forEach(uid => {
+        const peerIp = window.peerIps[uid] || '10.66.0.x';
         const row = document.createElement('div');
         row.className = 'user-card kokonut-card';
-        row.style.display = 'flex'; row.style.justifyContent = 'space-between'; row.style.alignItems = 'center'; row.style.padding = '8px';
-        row.innerHTML = `<div style="display:flex; align-items:center; gap:10px;"><img src="${window.peerAvatars[uid] || window.defaultAvatar}" style="width:30px; height:30px; border-radius:50%; object-fit:cover; border:1px solid var(--border-color);"><span style="font-size:13px; font-weight:bold;">${window.peerNames[uid]}</span></div><button class="icon-btn kokonut-btn btn-vol" data-uid="${uid}" style="font-size:16px;" title="Adjust Volume">🔊</button>`;
+        row.style.cssText = 'display:flex; justify-content:space-between; align-items:center; padding:8px;';
+        row.innerHTML = `
+            <div style="display:flex; align-items:center; gap:10px;">
+                <img src="${window.peerAvatars[uid] || window.defaultAvatar}" style="width:30px; height:30px; border-radius:50%; object-fit:cover; border:1px solid var(--border-color);">
+                <div>
+                    <div style="font-size:13px; font-weight:bold;">${window.peerNames[uid]}</div>
+                    <div style="font-size:10px; font-family:monospace; color:#10b981; cursor:pointer;" onclick="navigator.clipboard.writeText('${peerIp}')" title="Click to copy Friend's LAN IP">🌐 ${peerIp} 📋</div>
+                </div>
+            </div>
+            <button class="icon-btn kokonut-btn btn-vol" data-uid="${uid}" style="font-size:16px;" title="Adjust Volume">🔊</button>`;
         listEl.appendChild(row);
     });
 };
@@ -198,50 +268,44 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     });
 
-async function loadDevices() {
-    try {
-        // Trigger permissions once, then immediately release the streams
-        // so the device LEDs turn off and the enumerate call returns full labels.
+    async function loadDevices() {
         try {
-            const probe = await navigator.mediaDevices.getUserMedia({ audio: true, video: true });
-            probe.getTracks().forEach(t => t.stop());
+            try {
+                const probe = await navigator.mediaDevices.getUserMedia({ audio: true, video: true });
+                probe.getTracks().forEach(t => t.stop());
+            } catch (e) {
+                try { const a = await navigator.mediaDevices.getUserMedia({ audio: true }); a.getTracks().forEach(t => t.stop()); } catch(e2) {}
+                try { const v = await navigator.mediaDevices.getUserMedia({ video: true }); v.getTracks().forEach(t => t.stop()); } catch(e2) {}
+            }
+
+            const devices = await navigator.mediaDevices.enumerateDevices();
+            const audioIn  = document.getElementById('audio-in-select');
+            const audioOut = document.getElementById('audio-out-select');
+            const videoIn  = document.getElementById('video-in-select');
+            if (audioIn)  audioIn.innerHTML  = '';
+            if (audioOut) audioOut.innerHTML = '';
+            if (videoIn)  videoIn.innerHTML  = '';
+
+            devices.forEach(device => {
+                const opt = document.createElement('option');
+                opt.value = device.deviceId;
+                opt.text = device.label || `${device.kind} (${device.deviceId.slice(0,5) || 'unknown'}…)`;
+                if (device.kind === 'audioinput' && audioIn)  audioIn.appendChild(opt);
+                else if (device.kind === 'audiooutput' && audioOut) audioOut.appendChild(opt);
+                else if (device.kind === 'videoinput' && videoIn)   videoIn.appendChild(opt);
+            });
+
+            const restore = (el, key) => {
+                const saved = localStorage.getItem(key);
+                if (el && saved && Array.from(el.options).some(o => o.value === saved)) el.value = saved;
+            };
+            restore(audioIn, 'appAudioIn');
+            restore(audioOut, 'appAudioOut');
+            restore(videoIn, 'appVideoIn');
         } catch (e) {
-            try { const a = await navigator.mediaDevices.getUserMedia({ audio: true }); a.getTracks().forEach(t => t.stop()); } catch(e2) {}
-            try { const v = await navigator.mediaDevices.getUserMedia({ video: true }); v.getTracks().forEach(t => t.stop()); } catch(e2) {}
+            console.error("loadDevices failed:", e);
         }
-
-        const devices = await navigator.mediaDevices.enumerateDevices();
-        const audioIn  = document.getElementById('audio-in-select');
-        const audioOut = document.getElementById('audio-out-select');
-        const videoIn  = document.getElementById('video-in-select');
-        if (audioIn)  audioIn.innerHTML  = '';
-        if (audioOut) audioOut.innerHTML = '';
-        if (videoIn)  videoIn.innerHTML  = '';
-
-        let micCount = 0, outCount = 0, camCount = 0;
-        devices.forEach(device => {
-            const opt = document.createElement('option');
-            opt.value = device.deviceId;
-            opt.text = device.label || `${device.kind} (${device.deviceId.slice(0,5) || 'unknown'}…)`;
-            if (device.kind === 'audioinput' && audioIn)  { audioIn.appendChild(opt);  micCount++; }
-            else if (device.kind === 'audiooutput' && audioOut) { audioOut.appendChild(opt); outCount++; }
-            else if (device.kind === 'videoinput' && videoIn)   { videoIn.appendChild(opt);  camCount++; }
-        });
-
-        // Restore saved picks — but only if that device still exists
-        const restore = (el, key) => {
-            const saved = localStorage.getItem(key);
-            if (el && saved && Array.from(el.options).some(o => o.value === saved)) el.value = saved;
-        };
-        restore(audioIn, 'appAudioIn');
-        restore(audioOut, 'appAudioOut');
-        restore(videoIn, 'appVideoIn');
-
-        console.log(`[Devices] mic=${micCount} out=${outCount} cam=${camCount}`);
-    } catch (e) {
-        console.error("loadDevices failed:", e);
     }
-}
 
     const configView = document.getElementById('config-view');
     document.getElementById('settings-btn')?.addEventListener('click', () => { 
@@ -252,7 +316,6 @@ async function loadDevices() {
     });
     document.getElementById('refresh-devices-btn')?.addEventListener('click', loadDevices);
 
-    // Startup checkbox listener
     const startupToggle = document.getElementById('startup-toggle');
     if (startupToggle) {
         startupToggle.checked = localStorage.getItem('appStartup') === 'true';
@@ -263,7 +326,6 @@ async function loadDevices() {
         });
     }
 
-    // --- VIBEY THEME SAVING LOGIC ---
     document.getElementById('save-theme-btn')?.addEventListener('click', () => {
         const newName = document.getElementById('username-input')?.value.trim();
         if (newName) {
@@ -271,7 +333,14 @@ async function loadDevices() {
             if(dispName) dispName.textContent = newName; 
             localStorage.setItem('appUsername', newName);
             if (window.socket && window.socket.readyState === WebSocket.OPEN) {
-                window.socket.send(JSON.stringify({ action: 'presence', targetId: null, userId: window.myId, username: newName, avatar: localStorage.getItem('appAvatar') }));
+                window.socket.send(JSON.stringify({
+                    action: 'presence',
+                    targetId: null,
+                    userId: window.myId,
+                    username: newName,
+                    avatar: localStorage.getItem('appAvatar'),
+                    virtualIp: window.myVirtualIp
+                }));
             }
         }
 
@@ -282,7 +351,6 @@ async function loadDevices() {
         if (audioOut) localStorage.setItem('appAudioOut', audioOut); 
         if (videoIn) localStorage.setItem('appVideoIn', videoIn);
         
-        // NOISE GATE SAVE
         const gateVal = document.getElementById('noise-gate-slider')?.value;
         if (gateVal) localStorage.setItem('appNoiseGate', gateVal);
 
@@ -291,7 +359,6 @@ async function loadDevices() {
         const text = document.getElementById('color-text')?.value || '#e2e8f0'; 
         const accent = document.getElementById('color-accent')?.value || '#10b981';
         
-        // CONVERT SOLID HEX TO TRANSLUCENT GLASS (65% Opacity)
         let r = parseInt(panel.slice(1, 3), 16), g = parseInt(panel.slice(3, 5), 16), b = parseInt(panel.slice(5, 7), 16);
         const glassPanel = `rgba(${r || 10}, ${g || 20}, ${b || 12}, 0.65)`;
 
@@ -301,26 +368,23 @@ async function loadDevices() {
         document.documentElement.style.setProperty('--accent-main', accent);
         
         localStorage.setItem('themeBg', bg); 
-        localStorage.setItem('themePanel', panel); // Save raw hex for the color picker
+        localStorage.setItem('themePanel', panel);
         localStorage.setItem('themeText', text); 
         localStorage.setItem('themeAccent', accent);
 
-                if (configView) configView.style.display = 'none';
+        if (configView) configView.style.display = 'none';
 
-        // ---- HOT-SWAP ACTIVE STREAMS ----
         (async () => {
-if (window.localMicStream && audioIn) {
-    try {
-        localStorage.setItem('appAudioIn', audioIn);
-        await window.rebuildMicPipeline();
-        if (window.addChatLine) window.addChatLine('System', '🎙️ Microphone switched (suppression preserved).', 'system');
-    } catch (err) {
-        console.warn("Mic rebuild failed:", err);
-        if (window.addChatLine) window.addChatLine('System', '⚠️ Could not switch microphone.', 'system');
-    }
-}
+            if (window.localMicStream && audioIn) {
+                try {
+                    localStorage.setItem('appAudioIn', audioIn);
+                    await window.rebuildMicPipeline();
+                    if (window.addChatLine) window.addChatLine('System', '🎙️ Microphone switched (suppression preserved).', 'system');
+                } catch (err) {
+                    console.warn("Mic rebuild failed:", err);
+                }
+            }
 
-            // Webcam — swap in place if the camera is on
             if (window.localCamStream && videoIn) {
                 try {
                     const oldCamTrack = window.localCamStream.getVideoTracks()[0];
@@ -341,7 +405,6 @@ if (window.localMicStream && audioIn) {
                 } catch (err) { console.warn("Cam swap failed:", err); }
             }
 
-            // Audio output — re-apply sink to every remote <audio> element
             if (audioOut) {
                 document.querySelectorAll('[id^="audio-"]').forEach(a => {
                     if (typeof a.setSinkId === 'function') a.setSinkId(audioOut).catch(()=>{});
@@ -360,7 +423,6 @@ if (window.localMicStream && audioIn) {
         localStorage.removeItem('themeText'); 
         localStorage.removeItem('themeAccent');
         
-        // Reset Inputs visually
         const bgInp = document.getElementById('color-bg'); if(bgInp) bgInp.value = '#050a06'; 
         const pInp = document.getElementById('color-panel'); if(pInp) pInp.value = '#0a140c'; 
         const tInp = document.getElementById('color-text'); if(tInp) tInp.value = '#e2e8f0'; 
@@ -376,9 +438,10 @@ if (window.localMicStream && audioIn) {
         if (btn) {
             activeVolUid = btn.getAttribute('data-uid'); 
             const uvName = document.getElementById('uv-name');
-            if(uvName) uvName.innerText = `Volume: ${window.peerNames[activeVolUid]}`;
-            const existingAudio = document.querySelector(`.stream-${activeVolUid}`);
-            if(volSlider) volSlider.value = existingAudio ? existingAudio.volume : 0.8;
+            const savedVol = document.getElementById(`vol-${activeVolUid}`)?.value;
+            const currentVol = savedVol !== undefined ? parseFloat(savedVol) : 1.0;
+            if (uvName) uvName.innerText = `${window.peerNames[activeVolUid]}: ${Math.round(currentVol * 100)}%`;
+            if (volSlider) volSlider.value = currentVol;
             const rect = btn.getBoundingClientRect(); 
             if(volMenu) {
                 volMenu.style.left = (rect.left - 150) + 'px'; 
@@ -391,10 +454,17 @@ if (window.localMicStream && audioIn) {
         }
     });
 
-    volSlider?.addEventListener('input', (e) => {
+   volSlider?.addEventListener('input', (e) => {
         if (!activeVolUid) return; 
         const vol = parseFloat(e.target.value);
-        document.querySelectorAll(`.stream-${activeVolUid}`).forEach(media => { media.volume = vol; });
+        const uvName = document.getElementById('uv-name');
+        if (uvName) uvName.innerText = `${window.peerNames[activeVolUid]}: ${Math.round(vol * 100)}%`;
+
+        // Aplica o volume diretamente (0% a 200%) no GainNode unificado do av.js
+        if (window.remoteGainNodes && window.remoteGainNodes[activeVolUid]) {
+            window.remoteGainNodes[activeVolUid].gain.setTargetAtTime(vol, window.audioCtx.currentTime, 0.01);
+        }
+
         let hiddenInput = document.getElementById(`vol-${activeVolUid}`);
         if (!hiddenInput) { 
             hiddenInput = document.createElement('input'); 
@@ -414,7 +484,10 @@ if (window.localMicStream && audioIn) {
     });
 
     document.getElementById('leave-room-btn')?.addEventListener('click', () => { 
-        if (confirm('Disconnect from this room?')) window.location.href = 'index.html'; 
+        if (confirm('Disconnect from this room?')) {
+            if (window.ipcRenderer) window.ipcRenderer.send('leave-virtual-lan');
+            window.location.href = 'index.html'; 
+        }
     });
 
     const savedName = localStorage.getItem('appUsername'); 
@@ -428,24 +501,20 @@ if (window.localMicStream && audioIn) {
         const cap = document.getElementById('config-avatar-preview'); if(cap) cap.src = savedAvatar; 
     }
     
-    // --- NOISE GATE INIT ---
     const savedGate = localStorage.getItem('appNoiseGate');
     const gateSlider = document.getElementById('noise-gate-slider');
     if (savedGate && gateSlider) gateSlider.value = savedGate;
 
-    // --- VIBEY THEME INITIALIZATION ---
     const savedBg = localStorage.getItem('themeBg') || '#050a06'; 
     const savedPanel = localStorage.getItem('themePanel') || '#0a140c'; 
     const savedText = localStorage.getItem('themeText') || '#e2e8f0'; 
     const savedAccent = localStorage.getItem('themeAccent') || '#10b981'; 
 
-    // Update color inputs so saving doesn't overwrite them with black
     const bgInp = document.getElementById('color-bg'); if(bgInp) bgInp.value = savedBg;
     const pInp = document.getElementById('color-panel'); if(pInp) pInp.value = savedPanel;
     const tInp = document.getElementById('color-text'); if(tInp) tInp.value = savedText;
     const aInp = document.getElementById('color-accent'); if(aInp) aInp.value = savedAccent;
 
-    // Apply the glass transparency on boot
     let pr = parseInt(savedPanel.slice(1, 3), 16), pg = parseInt(savedPanel.slice(3, 5), 16), pb = parseInt(savedPanel.slice(5, 7), 16);
     const glassPanelInit = `rgba(${pr || 10}, ${pg || 20}, ${pb || 12}, 0.65)`;
 
