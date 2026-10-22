@@ -1,50 +1,53 @@
 {
   "name": "conflict",
-  "version": "1.17.2",
-  "description": "Secure P2P Comms & Media",
-  "author": "YourName",
+  "version": "1.18.1",
+  "description": "Secure P2P Comms, VTT & Virtual LAN",
   "main": "js/main.js",
   "scripts": {
     "start": "electron .",
-    "build": "electron-builder --win"
+    "build": "electron-builder --win",
+    "dist:win": "electron-builder --win",
+    "dist:linux": "electron-builder --linux"
   },
   "dependencies": {
-    "@3d-dice/dice-box": "^1.1.4",
-    "@sapphi-red/web-noise-suppressor": "^0.4.0",
-    "electron-updater": "^6.8.9",
-    "localtunnel": "^2.0.2",
-    "mqtt": "^5.16.0",
+    "@sapphi-red/web-noise-suppressor": "^0.3.3",
+    "electron-updater": "^6.1.7",
+    "mqtt": "^5.3.0",
     "ws": "^8.16.0"
   },
   "devDependencies": {
-    "@electron/rebuild": "^4.2.0",
-    "electron": "^44.0.0",
-    "electron-builder": "^26.15.3"
+    "electron": "^29.0.0",
+    "electron-builder": "^24.13.3"
   },
   "build": {
-    "appId": "com.conflict.app",
+    "appId": "com.aerynmintz.conflict",
     "productName": "Conflict",
-    "buildDependenciesFromSource": true,
-    "npmRebuild": false,
-    "directories": {
-      "output": "dist"
-    },
-    "publish": [
-      {
-        "provider": "github",
-        "owner": "Aeryn-Mintz",
-        "repo": "Conflict"
-      }
+    "asarUnpack": [
+      "node_modules/@sapphi-red/web-noise-suppressor/**/*",
+      "bin/**/*"
     ],
     "win": {
       "target": "nsis",
-      "icon": "conflict-logo.png"
+      "icon": "conflict-logo.png",
+      "requestedExecutionLevel": "requireAdministrator",
+      "extraResources": [
+        {
+          "from": "bin/win/",
+          "to": "bin/win/",
+          "filter": ["**/*"]
+        }
+      ]
     },
-    "nsis": {
-      "oneClick": false,
-      "allowToChangeInstallationDirectory": true,
-      "createDesktopShortcut": true,
-      "createStartMenuShortcut": true
+    "linux": {
+      "target": ["AppImage", "deb"],
+      "category": "Network",
+      "extraResources": [
+        {
+          "from": "bin/linux/",
+          "to": "bin/linux/",
+          "filter": ["**/*"]
+        }
+      ]
     }
   }
 }
