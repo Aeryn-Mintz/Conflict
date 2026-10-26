@@ -3,25 +3,125 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Conflict Launcher</title>
+    <title>Conflict</title>
     <link rel="stylesheet" href="style.css">
     <style>
-        body { display: flex; align-items: center; justify-content: center; background-image: radial-gradient(circle at 50% 50%, rgba(16, 185, 129, 0.1), transparent 70%); background-color: var(--bg-base, #050a06); color: var(--text-main, #ecfdf5); margin: 0; height: 100vh; font-family: sans-serif; }
-        .launcher-box { width: 100%; max-width: 450px; text-align: center; padding: 40px; background: var(--panel-bg, rgba(13, 26, 16, 0.75)); border: 1px solid rgba(16, 185, 129, 0.2); border-radius: 12px; }
-        .brand-huge { font-size: 36px; font-weight: 900; margin-bottom: 10px; display: flex; align-items: center; justify-content: center; gap: 15px; text-transform: uppercase; }
-        .brand-icon-img { width: 45px; height: 45px; filter: drop-shadow(0 0 15px rgba(16, 185, 129, 0.8)); }
-        .subtitle { color: rgba(255,255,255,0.6); margin-bottom: 40px; font-size: 14px; }
-        .choice-btn { width: 100%; padding: 15px; font-size: 16px; margin-bottom: 15px; border-radius: 8px; cursor: pointer; border: none; font-weight: bold; transition: 0.2s; }
-        .primary-btn { background: #10b981; color: #000; box-shadow: 0 0 10px rgba(16, 185, 129, 0.4); }
-        .secondary-btn { background: rgba(255,255,255,0.1); color: #fff; border: 1px solid rgba(255,255,255,0.2); }
-        .outline-btn { background: transparent; color: #fff; border: 1px solid rgba(255,255,255,0.2); }
-        .hidden-panel { display: none; margin-top: 25px; padding-top: 25px; border-top: 1px solid rgba(255,255,255,0.1); animation: fadeIn 0.3s ease; }
-        @keyframes fadeIn { from { opacity: 0; transform: translateY(-10px); } to { opacity: 1; transform: translateY(0); } }
-        @keyframes spin { 100% { transform: rotate(360deg); } }
-        .invite-box { background: rgba(0,0,0,0.4); padding: 12px; border-radius: 8px; font-family: monospace; color: #10b981; margin-bottom: 15px; border: 1px dashed rgba(16, 185, 129, 0.5); cursor: pointer; transition: 0.2s; }
-        .invite-box:hover { background: rgba(16, 185, 129, 0.2); }
-        input { padding: 10px; border-radius: 6px; border: 1px solid rgba(255,255,255,0.2); background: rgba(0,0,0,0.5); color: #fff; }
-        .room-radar-card { display: flex; justify-content: space-between; align-items: center; padding: 8px 10px; background: rgba(0,0,0,0.5); border: 1px solid rgba(16, 185, 129, 0.25); border-radius: 8px; text-align: left; }
+        body {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background-image: radial-gradient(circle at 50% 50%, rgba(16, 185, 129, 0.1), transparent 70%);
+            background-color: var(--bg-base, #050a06);
+            color: var(--text-main, #ecfdf5);
+            margin: 0;
+            height: 100vh;
+            font-family: sans-serif;
+            user-select: none;
+        }
+        .launcher-box {
+            width: 100%;
+            max-width: 480px;
+            text-align: center;
+            padding: 32px;
+            background: var(--panel-bg, rgba(13, 26, 16, 0.75));
+            border: 1px solid rgba(16, 185, 129, 0.2);
+            border-radius: 12px;
+            max-height: 88vh;
+            overflow-y: auto;
+            box-shadow: 0 12px 40px rgba(0, 0, 0, 0.6);
+        }
+        .brand-huge {
+            font-size: 34px;
+            font-weight: 900;
+            margin-bottom: 24px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 14px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+        .brand-icon-img {
+            width: 44px;
+            height: 44px;
+            filter: drop-shadow(0 0 15px rgba(16, 185, 129, 0.8));
+        }
+        .choice-btn {
+            width: 100%;
+            padding: 12px;
+            font-size: 14px;
+            margin-bottom: 10px;
+            border-radius: 8px;
+            cursor: pointer;
+            border: none;
+            font-weight: bold;
+            transition: 0.2s;
+        }
+        .primary-btn {
+            background: #10b981;
+            color: #000;
+            box-shadow: 0 0 10px rgba(16, 185, 129, 0.4);
+        }
+        .primary-btn:hover {
+            filter: brightness(1.1);
+        }
+        .secondary-btn {
+            background: rgba(255, 255, 255, 0.1);
+            color: #fff;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+        .secondary-btn:hover {
+            background: rgba(255, 255, 255, 0.16);
+        }
+        .outline-btn {
+            background: transparent;
+            color: #fff;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+        .hidden-panel {
+            display: none;
+            margin-top: 18px;
+            padding-top: 18px;
+            border-top: 1px solid rgba(255, 255, 255, 0.1);
+            animation: fadeIn 0.2s ease;
+        }
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(-6px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        @keyframes spin {
+            100% { transform: rotate(360deg); }
+        }
+        input {
+            padding: 10px 12px;
+            border-radius: 6px;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            background: rgba(0, 0, 0, 0.5);
+            color: #fff;
+            outline: none;
+        }
+        input:focus {
+            border-color: #10b981;
+            box-shadow: 0 0 8px rgba(16, 185, 129, 0.3);
+        }
+        .room-radar-card {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 10px 12px;
+            background: rgba(0, 0, 0, 0.5);
+            border: 1px solid rgba(16, 185, 129, 0.25);
+            border-radius: 8px;
+            text-align: left;
+        }
+        .net-badge {
+            font-family: monospace;
+            background: rgba(16, 185, 129, 0.15);
+            color: #10b981;
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-size: 11px;
+        }
     </style>
 </head>
 <body>
@@ -29,61 +129,73 @@
         <img src="https://flagcdn.com/w40/gb.png" alt="English" id="flag-en" class="lang-flag" style="width: 32px; height: 24px; cursor: pointer; border-radius: 4px; border: 2px solid transparent; transition: all 0.2s ease; object-fit: cover;">
         <img src="https://flagcdn.com/w40/br.png" alt="Português" id="flag-pt-br" class="lang-flag" style="width: 32px; height: 24px; cursor: pointer; border-radius: 4px; border: 2px solid transparent; transition: all 0.2s ease; object-fit: cover;">
     </div>
+
     <div id="update-overlay" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(5, 10, 6, 0.9); z-index: 9999; justify-content: center; align-items: center; flex-direction: column; backdrop-filter: blur(5px);">
         <div style="width: 40px; height: 40px; border: 4px solid rgba(255, 255, 255, 0.1); border-top-color: #10b981; border-radius: 50%; animation: spin 1s linear infinite;"></div>
-        <span id="update-msg" style="color: #10b981; margin-top: 15px; font-weight: bold;">Buscando atualizações no servidor...</span>
-        <div style="width: 300px; height: 8px; background: rgba(255,255,255,0.1); margin-top: 15px; border-radius: 4px; overflow: hidden;"><div id="update-progress-bar" style="width: 0%; height: 100%; background: #10b981; transition: width 0.2s ease;"></div></div>
+        <span id="update-msg" style="color: #10b981; margin-top: 15px; font-weight: bold;">Checking for updates...</span>
+        <div style="width: 300px; height: 8px; background: rgba(255,255,255,0.1); margin-top: 15px; border-radius: 4px; overflow: hidden;">
+            <div id="update-progress-bar" style="width: 0%; height: 100%; background: #10b981; transition: width 0.2s ease;"></div>
+        </div>
     </div>
 
     <div class="launcher-box">
         <div class="brand-huge"><img src="./conflict-logo.png" alt="Logo" class="brand-icon-img"> Conflict</div>
-        <div class="subtitle">Secure P2P Comms & Media</div>
+
+        <!-- BACKGROUND LAN STATUS BAR -->
+        <div id="bg-lan-status-bar" style="display:none; background: rgba(16, 185, 129, 0.12); border: 1px solid #10b981; border-radius: 8px; padding: 8px 12px; margin-bottom: 16px; justify-content: space-between; align-items: center; font-size: 12px;">
+            <div id="bg-lan-status-text" style="text-align: left; color: #ecfdf5;"></div>
+            <div style="display: flex; gap: 6px;">
+                <button id="btn-open-active-room" class="primary-btn" style="padding: 5px 10px; font-size: 11px; border-radius: 5px; border: none; cursor: pointer; font-weight: bold;">Open Room</button>
+                <button id="btn-disconnect-bg-lan" class="outline-btn" style="padding: 5px 8px; font-size: 11px; border-radius: 5px; cursor: pointer; color: #ef4444; border-color: rgba(239,68,68,0.5);">Disconnect</button>
+            </div>
+        </div>
 
         <div id="main-choices">
-            <button id="host-game-btn" class="primary-btn choice-btn">Host a Room</button>
-            <button id="join-game-btn" class="secondary-btn choice-btn">Join a Room</button>
-        </div>
+            <div style="text-align: left; margin-bottom: 16px;">
+                <div style="font-size: 11px; font-weight: bold; color: rgba(255,255,255,0.55); text-transform: uppercase; margin-bottom: 8px; display: flex; justify-content: space-between;">
+                    <span id="saved-networks-title">🌐 My Saved Networks</span>
+                </div>
+                <div id="saved-networks-list" style="display: flex; flex-direction: column; gap: 8px; max-height: 185px; overflow-y: auto;"></div>
+            </div>
 
-        <div id="host-panel" class="hidden-panel">
-            <h3 style="margin-top: 0; margin-bottom: 10px;">Starting Secure Server...</h3>
-            <p id="host-status" style="color: rgba(255,255,255,0.6); font-size: 13px;">Spinning up P2P tunnel, please wait...</p>
-            <div id="invite-section" style="display: none;">
-                <p style="font-size: 13px; margin-bottom: 5px;">Click the code below to copy or let friends find you on Radar:</p>
-                <div class="invite-box" id="invite-link-display" title="Click to copy Room Code">Loading...</div>
-                <button id="btn-enter-hosted" class="primary-btn choice-btn" style="margin-top: 10px;">Enter Room</button>
-                <p style="font-size: 11px; color: #10b981; margin-top: 10px;">📡 Radar Beacon Active (Visible to Friends)</p>
+            <div style="background: rgba(0,0,0,0.35); padding: 14px; border-radius: 10px; border: 1px solid rgba(16, 185, 129, 0.2);">
+                <input type="text" id="new-net-name-input" placeholder="Network Name (e.g. Squad 1-2-3, RPG Table)..." style="width: 100%; box-sizing: border-box; margin-bottom: 10px; font-size: 13px;">
+                <div style="display: flex; gap: 10px;">
+                    <button id="host-game-btn" class="primary-btn choice-btn" style="margin-bottom: 0; flex: 1;">➕ Create Network</button>
+                    <button id="join-game-btn" class="secondary-btn choice-btn" style="margin-bottom: 0; flex: 1;">🔗 Join Network</button>
+                </div>
             </div>
         </div>
 
+        <!-- JOIN NETWORK PANEL -->
         <div id="join-panel" class="hidden-panel">
-            <h3 style="margin-top: 0; margin-bottom: 15px;">Join a Room</h3>
+            <h3 id="join-net-heading" style="margin-top: 0; margin-bottom: 14px;">Join a Network</h3>
             
-            <div style="background: rgba(0,0,0,0.3); padding: 15px; border-radius: 8px; margin-bottom: 15px; border: 1px solid rgba(255,255,255,0.05);">
-                <p style="color: rgba(255,255,255,0.6); font-size: 12px; margin-top: 0; margin-bottom: 10px; text-align: left;">Option 1: Room Code</p>
+            <div style="background: rgba(0,0,0,0.3); padding: 14px; border-radius: 8px; margin-bottom: 14px; border: 1px solid rgba(255,255,255,0.05); text-align: left;">
+                <p id="opt1-code-label" style="color: rgba(255,255,255,0.6); font-size: 12px; margin-top: 0; margin-bottom: 8px;">Option 1: Enter Network Name & Code</p>
+                <input type="text" id="join-net-name-input" placeholder="Exact Network Name (or paste Invite)..." style="width: 100%; box-sizing: border-box; margin-bottom: 8px; font-size: 12px;">
                 <div style="display: flex; gap: 8px;">
-                    <input type="text" id="invite-input" placeholder="Enter 6-Letter Room Code..." style="flex-grow: 1; box-sizing: border-box; text-align: center; font-size: 12px; text-transform: uppercase;">
-                    <button id="btn-connect-join" class="primary-btn choice-btn" style="width: auto; margin-bottom: 0; padding: 10px 20px;">Connect</button>
+                    <input type="text" id="invite-input" placeholder="6-Letter Network Code..." style="flex-grow: 1; box-sizing: border-box; text-align: center; font-size: 13px; text-transform: uppercase; font-weight: bold;">
+                    <button id="btn-connect-join" class="primary-btn choice-btn" style="width: auto; margin-bottom: 0; padding: 10px 20px;">Save & Join</button>
                 </div>
             </div>
 
-            <div id="radar-container" style="background: rgba(0,0,0,0.3); padding: 15px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.05);">
+            <div id="radar-container" style="background: rgba(0,0,0,0.3); padding: 14px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.05);">
                 <p style="color: rgba(255,255,255,0.6); font-size: 12px; margin-top: 0; margin-bottom: 10px; display: flex; justify-content: space-between;">
-                    <span>Option 2: Friends' Open Rooms</span>
+                    <span id="opt2-radar-label">Option 2: Active Networks on Radar</span>
                     <span id="radar-spinner" style="display:none; color: #10b981;">Scanning...</span>
                 </p>
-                <div id="radar-results" style="display: flex; flex-direction: column; gap: 8px; max-height: 160px; overflow-y: auto;">
-                    <span style="color: rgba(255,255,255,0.4); font-size: 12px;">Click scan to find open rooms online.</span>
-                </div>
-                <button id="scan-rooms-btn" class="secondary-btn choice-btn" style="margin-bottom: 0; margin-top: 10px; font-size: 14px; padding: 10px;">📡 Scan for Rooms</button>
+                <div id="radar-results" style="display: flex; flex-direction: column; gap: 8px; max-height: 150px; overflow-y: auto;"></div>
+                <button id="scan-rooms-btn" class="secondary-btn choice-btn" style="margin-bottom: 0; margin-top: 10px; font-size: 13px; padding: 9px;">📡 Scan for Networks</button>
             </div>
 
-            <button id="btn-back-join" class="outline-btn choice-btn" style="margin-top: 15px; margin-bottom: 0;">Back</button>
+            <button id="btn-back-join" class="outline-btn choice-btn" style="margin-top: 14px; margin-bottom: 0;">Back</button>
         </div>
     </div>
 
     <script src="js/lang.js"></script>
+    <script src="js/updater.js"></script>
     <script>
-        // Apply Global Vibe to Launcher
         const savedBg = localStorage.getItem('themeBg');
         const savedPanel = localStorage.getItem('themePanel');
         const savedText = localStorage.getItem('themeText');
@@ -100,49 +212,182 @@
         let ipcRenderer = null;
         try { if (typeof require !== 'undefined') ipcRenderer = require('electron').ipcRenderer; } catch (e) {}
 
+        const myPersistentUid = localStorage.getItem('conflictPersistentUid') || Math.random().toString(36).substring(2, 15);
+        localStorage.setItem('conflictPersistentUid', myPersistentUid);
+
+        let currentActiveRoomCode = null;
+        let currentVirtualIp = '10.66.0.x';
+
         const mainChoices = document.getElementById('main-choices');
-        const hostPanel = document.getElementById('host-panel');
         const joinPanel = document.getElementById('join-panel');
         const radarResults = document.getElementById('radar-results');
         const radarSpinner = document.getElementById('radar-spinner');
         const scanBtn = document.getElementById('scan-rooms-btn');
 
-        function triggerRoomScan() {
-            if (!ipcRenderer) return;
-            if (radarSpinner) radarSpinner.style.display = 'inline';
-            if (scanBtn) scanBtn.disabled = true;
-            radarResults.innerHTML = `<span style="color: rgba(255,255,255,0.5); font-size: 12px;">Searching for active rooms...</span>`;
-            ipcRenderer.send('scan-rooms');
+        function getCurTranslations() {
+            const lang = localStorage.getItem('conflictLang') || 'en';
+            return (window.conflictTranslations && window.conflictTranslations[lang]) || window.conflictTranslations?.['en'] || {};
         }
 
+        function getSavedNetworks() {
+            try { return JSON.parse(localStorage.getItem('conflict_networks') || '[]'); } catch (e) { return []; }
+        }
+
+        function saveNetworkToStorage(code, name) {
+            const cleanCode = code.trim().toUpperCase();
+            const finalName = (name && name.trim()) ? name.trim() : `Network #${cleanCode}`;
+            let list = getSavedNetworks();
+            const existing = list.find(n => n.code === cleanCode && n.name.toLowerCase() === finalName.toLowerCase());
+
+            if (existing) {
+                existing.name = finalName;
+                existing.lastUsed = Date.now();
+            } else {
+                list.unshift({ code: cleanCode, name: finalName, lastUsed: Date.now() });
+            }
+            localStorage.setItem('conflict_networks', JSON.stringify(list));
+            localStorage.setItem('conflictActiveNetwork', JSON.stringify({ code: cleanCode, name: finalName }));
+        }
+
+        function deleteNetworkFromStorage(code, name) {
+            let list = getSavedNetworks().filter(n => !(n.code === code && (!name || n.name === name)));
+            localStorage.setItem('conflict_networks', JSON.stringify(list));
+            if (currentActiveRoomCode === code && ipcRenderer) {
+                ipcRenderer.send('leave-virtual-lan');
+                localStorage.removeItem('conflictActiveNetwork');
+                currentActiveRoomCode = null;
+            }
+            window.renderSavedNetworks();
+        }
+
+        function connectToNetwork(code, name, openRoomAfter = true) {
+            const cleanCode = code.trim().toUpperCase();
+            const cleanName = (name && name.trim()) ? name.trim() : `Network #${cleanCode}`;
+            saveNetworkToStorage(cleanCode, cleanName);
+            localStorage.setItem('conflictServerUrl', 'ws://localhost:8080');
+            currentActiveRoomCode = cleanCode;
+
+            if (ipcRenderer) {
+                const userName = localStorage.getItem('appUsername') || 'Player';
+                ipcRenderer.send('connect-network', {
+                    roomCode: cleanCode,
+                    roomName: cleanName,
+                    hostName: userName,
+                    userId: myPersistentUid
+                });
+            }
+
+            if (openRoomAfter) {
+                window.location.href = 'app.html';
+            } else {
+                window.renderSavedNetworks();
+            }
+        }
+
+        window.renderSavedNetworks = function() {
+            const cont = document.getElementById('saved-networks-list');
+            const statusBar = document.getElementById('bg-lan-status-bar');
+            const statusText = document.getElementById('bg-lan-status-text');
+            if (!cont) return;
+
+            const list = getSavedNetworks();
+            const t = getCurTranslations();
+            const savedActive = JSON.parse(localStorage.getItem('conflictActiveNetwork') || 'null');
+            cont.innerHTML = '';
+
+            if (statusBar && statusText) {
+                if (currentActiveRoomCode) {
+                    const netTitle = (savedActive && savedActive.code === currentActiveRoomCode) ? savedActive.name : `#${currentActiveRoomCode}`;
+                    statusBar.style.display = 'flex';
+                    statusText.innerHTML = `🟢 <strong>${netTitle}</strong> (<span style="font-family:monospace;">${currentActiveRoomCode}</span>) — LAN: <span style="font-family:monospace; color:#10b981;">${currentVirtualIp}</span>`;
+                } else {
+                    statusBar.style.display = 'none';
+                }
+            }
+
+            if (list.length === 0) {
+                cont.innerHTML = `<div style="padding: 14px; background: rgba(0,0,0,0.3); border-radius: 8px; border: 1px dashed rgba(255,255,255,0.15); color: rgba(255,255,255,0.45); font-size: 12px; text-align: center;">${t.noSavedNetworks || 'No saved networks yet. Create or join one below!'}</div>`;
+                return;
+            }
+
+            list.forEach(net => {
+                const isConnected = currentActiveRoomCode === net.code && (!savedActive || savedActive.name === net.name);
+                const card = document.createElement('div');
+                card.className = 'room-radar-card';
+                if (isConnected) card.style.borderColor = '#10b981';
+
+                card.innerHTML = `
+                    <div class="net-info-area" style="overflow:hidden; flex-grow:1; margin-right:8px;">
+                        <div class="net-title-text" style="font-weight:bold; font-size:14px; color:#fff; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">
+                            ${isConnected ? '🟢' : '🌐'} ${net.name}
+                        </div>
+                        <div style="font-size:11px; color:rgba(255,255,255,0.5); margin-top:2px;">
+                            Code: <span class="net-badge">${net.code}</span>
+                            ${isConnected ? `<span style="color:#10b981; margin-left:6px; font-weight:bold;">• LAN Active</span>` : ''}
+                        </div>
+                    </div>
+                    <div style="display:flex; gap:6px; align-items:center; flex-shrink:0;">
+                        ${!isConnected ? `<button class="secondary-btn btn-lan-only" title="Activate LAN in background without opening room" style="padding:6px 8px; font-size:11px; border-radius:6px; cursor:pointer;">🎮 LAN</button>` : ''}
+                        <button class="primary-btn btn-conn" style="padding:6px 12px; font-size:12px; border-radius:6px; border:none; cursor:pointer; font-weight:bold;">${isConnected ? 'Open Room' : (t.connectBtn || 'Connect')}</button>
+                        <button class="outline-btn btn-del" title="Remove" style="padding:5px 8px; font-size:11px; border-radius:6px; cursor:pointer; color:#ef4444; border-color:rgba(239,68,68,0.4);">✕</button>
+                    </div>
+                `;
+                card.querySelector('.btn-conn').onclick = () => connectToNetwork(net.code, net.name, true);
+                card.querySelector('.btn-lan-only')?.addEventListener('click', () => connectToNetwork(net.code, net.name, false));
+                card.querySelector('.btn-del').onclick = () => deleteNetworkFromStorage(net.code, net.name);
+                cont.appendChild(card);
+            });
+        };
+
+        document.getElementById('btn-open-active-room')?.addEventListener('click', () => {
+            window.location.href = 'app.html';
+        });
+
+        document.getElementById('btn-disconnect-bg-lan')?.addEventListener('click', () => {
+            if (ipcRenderer) ipcRenderer.send('leave-virtual-lan');
+            localStorage.removeItem('conflictActiveNetwork');
+            currentActiveRoomCode = null;
+            window.renderSavedNetworks();
+        });
+
         if (ipcRenderer) {
-            ipcRenderer.on('host-started', (event, data) => {
-                document.getElementById('host-status').style.display = 'none'; 
-                document.getElementById('invite-section').style.display = 'block';
-                localStorage.setItem('conflictServerUrl', 'ws://localhost:8080');
-                
-                const inviteDisplay = document.getElementById('invite-link-display');
-                inviteDisplay.innerHTML = `<span style="font-size: 24px; font-weight: bold; letter-spacing: 3px;">${data.roomCode}</span>`;
-                inviteDisplay.onclick = () => {
-                    navigator.clipboard.writeText(data.roomCode);
-                    const originalHTML = inviteDisplay.innerHTML;
-                    inviteDisplay.innerHTML = `<span style="font-size: 14px; font-weight: bold;">Code Copied!</span>`;
-                    setTimeout(() => { inviteDisplay.innerHTML = originalHTML; }, 2000);
-                };
+            ipcRenderer.invoke('get-network-status').then((status) => {
+                if (status && status.virtualIp) currentVirtualIp = status.virtualIp;
+                const savedActive = JSON.parse(localStorage.getItem('conflictActiveNetwork') || 'null');
+
+                if (status && status.activeRoomCode) {
+                    currentActiveRoomCode = status.activeRoomCode;
+                    window.renderSavedNetworks();
+                } else if (savedActive && savedActive.code) {
+                    currentActiveRoomCode = savedActive.code;
+                    ipcRenderer.invoke('ensure-network', {
+                        roomCode: savedActive.code,
+                        roomName: savedActive.name,
+                        hostName: localStorage.getItem('appUsername') || 'Player',
+                        userId: myPersistentUid
+                    }).then((res) => {
+                        if (res && res.virtualIp) currentVirtualIp = res.virtualIp;
+                        window.renderSavedNetworks();
+                    });
+                } else {
+                    window.renderSavedNetworks();
+                }
             });
 
-            ipcRenderer.on('room-joined', () => {
-                localStorage.setItem('conflictServerUrl', 'ws://localhost:8080');
-                window.location.href = 'app.html';
+            ipcRenderer.on('network-disconnected', () => {
+                currentActiveRoomCode = null;
+                localStorage.removeItem('conflictActiveNetwork');
+                window.renderSavedNetworks();
             });
 
             ipcRenderer.on('scan-rooms-result', (event, rooms) => {
+                const t = getCurTranslations();
                 if (radarSpinner) radarSpinner.style.display = 'none';
                 if (scanBtn) scanBtn.disabled = false;
                 radarResults.innerHTML = '';
 
                 if (!rooms || rooms.length === 0) {
-                    radarResults.innerHTML = `<span style="color: rgba(255,255,255,0.4); font-size: 12px;">No open rooms found right now.</span>`;
+                    radarResults.innerHTML = `<span style="color: rgba(255,255,255,0.4); font-size: 12px;">${t.noRadarRooms || 'No active networks found on radar right now.'}</span>`;
                     return;
                 }
 
@@ -154,41 +399,61 @@
                             <img src="${room.avatar || './Banaya.png'}" style="width:32px; height:32px; border-radius:50%; object-fit:cover; border:1px solid #10b981; flex-shrink:0;">
                             <div style="overflow:hidden;">
                                 <div style="font-weight:bold; font-size:13px; color:#fff; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${room.roomName}</div>
-                                <div style="font-size:11px; color:rgba(255,255,255,0.6);">Host: ${room.hostName} • <strong style="color:#10b981;">${room.roomCode}</strong></div>
+                                <div style="font-size:11px; color:rgba(255,255,255,0.6);">Online: ${room.hostName} • <strong style="color:#10b981;">${room.roomCode}</strong></div>
                             </div>
                         </div>
-                        <button class="primary-btn" style="padding:6px 12px; font-size:12px; border-radius:6px; border:none; cursor:pointer; font-weight:bold; flex-shrink:0;">Join</button>
+                        <button class="primary-btn" style="padding:6px 12px; font-size:12px; border-radius:6px; border:none; cursor:pointer; font-weight:bold; flex-shrink:0;">${t.connectBtn || 'Connect'}</button>
                     `;
-                    card.querySelector('button').onclick = (e) => {
-                        e.target.innerText = "Joining...";
-                        e.target.disabled = true;
-                        ipcRenderer.send('join-room', room.roomCode);
-                    };
+                    card.querySelector('button').onclick = () => connectToNetwork(room.roomCode, room.roomName, true);
                     radarResults.appendChild(card);
                 });
             });
+        } else {
+            window.renderSavedNetworks();
         }
 
-        document.getElementById('host-game-btn').addEventListener('click', () => {
-            if (!ipcRenderer) return alert("Hosting is only available on the Desktop App!");
-            mainChoices.style.display = 'none'; 
-            hostPanel.style.display = 'block'; 
-            
-            const hostName = localStorage.getItem('appUsername') || 'Host';
-            const avatar = localStorage.getItem('appAvatar') || './Banaya.png';
-            ipcRenderer.send('start-host', {
-                hostName: hostName,
-                roomName: `${hostName}'s Room`,
-                avatar: avatar
-            });
+        function triggerRoomScan() {
+            if (!ipcRenderer) return;
+            const t = getCurTranslations();
+            if (radarSpinner) radarSpinner.style.display = 'inline';
+            if (scanBtn) scanBtn.disabled = true;
+            radarResults.innerHTML = `<span style="color: rgba(255,255,255,0.5); font-size: 12px;">${t.radarScanning || 'Searching for active networks...'}</span>`;
+            ipcRenderer.send('scan-rooms');
+        }
+
+        document.getElementById('join-net-name-input')?.addEventListener('input', (e) => {
+            const val = e.target.value;
+            if (val.includes('|')) {
+                const parts = val.split('|');
+                e.target.value = parts[0].trim();
+                const codeInp = document.getElementById('invite-input');
+                if (codeInp && parts[1]) codeInp.value = parts[1].trim().toUpperCase();
+            }
         });
 
-        document.getElementById('btn-enter-hosted').addEventListener('click', () => window.location.href = 'app.html');
+        document.getElementById('host-game-btn').addEventListener('click', () => {
+            const rawName = document.getElementById('new-net-name-input')?.value.trim();
+            if (!rawName) {
+                document.getElementById('new-net-name-input')?.focus();
+                return alert("Please enter a Network Name above before creating the network!");
+            }
+            const newCode = Math.random().toString(36).substring(2, 8).toUpperCase();
+            connectToNetwork(newCode, rawName, true);
+        });
+
+        document.getElementById('new-net-name-input')?.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') document.getElementById('host-game-btn').click();
+        });
 
         document.getElementById('join-game-btn').addEventListener('click', () => {
+            const mainName = document.getElementById('new-net-name-input')?.value.trim();
+            if (mainName) {
+                const joinNameInp = document.getElementById('join-net-name-input');
+                if (joinNameInp && !joinNameInp.value) joinNameInp.value = mainName;
+            }
             mainChoices.style.display = 'none'; 
             joinPanel.style.display = 'block';
-            triggerRoomScan(); // Faz uma busca automática assim que abre o painel!
+            triggerRoomScan();
         });
         
         document.getElementById('btn-back-join').addEventListener('click', () => { 
@@ -199,14 +464,11 @@
         document.getElementById('scan-rooms-btn').addEventListener('click', triggerRoomScan);
 
         document.getElementById('btn-connect-join').addEventListener('click', () => {
-            const input = document.getElementById('invite-input').value.trim().toUpperCase();
-            if (!input || input.length < 3) return;
-            
-            const connectBtn = document.getElementById('btn-connect-join');
-            connectBtn.innerText = "Connecting..."; 
-            connectBtn.disabled = true;
-
-            ipcRenderer.send('join-room', input);
+            const code = document.getElementById('invite-input').value.trim().toUpperCase();
+            const exactName = document.getElementById('join-net-name-input').value.trim();
+            if (!exactName) return alert("Please enter the Network Name!");
+            if (!code || code.length < 3) return alert("Please enter a valid Network Code!");
+            connectToNetwork(code, exactName, true);
         });
     </script>
 </body>

@@ -969,3 +969,95 @@ body { background-image: radial-gradient(circle at top right, rgba(16, 185, 129,
     pointer-events: auto !important;
     filter: grayscale(100%);
 }
+/* =========================================================
+   STUDIO UI & GLASSMORPHISM DESIGN UPGRADE
+   ========================================================= */
+.panel.glass-panel {
+    background: linear-gradient(145deg, rgba(12, 24, 15, 0.78), rgba(6, 12, 8, 0.88)) !important;
+    backdrop-filter: blur(16px) saturate(160%) !important;
+    -webkit-backdrop-filter: blur(16px) saturate(160%) !important;
+    border: 1px solid rgba(16, 185, 129, 0.18) !important;
+    box-shadow: 0 12px 36px rgba(0, 0, 0, 0.65), inset 0 1px 0 rgba(255, 255, 255, 0.06) !important;
+    border-radius: 12px !important;
+    transition: border-color 0.25s ease, box-shadow 0.25s ease;
+}
+
+.panel.glass-panel:hover {
+    border-color: rgba(16, 185, 129, 0.32) !important;
+}
+
+.drag-handle {
+    background: linear-gradient(90deg, rgba(16, 185, 129, 0.12), rgba(0, 0, 0, 0.45)) !important;
+    border-bottom: 1px solid rgba(16, 185, 129, 0.15) !important;
+    padding: 10px 16px !important;
+    border-radius: 12px 12px 0 0 !important;
+    letter-spacing: 0.4px;
+}
+
+.kokonut-btn, .primary-btn, .secondary-btn, .outline-btn, .icon-btn {
+    border-radius: 8px !important;
+    transition: all 0.18s cubic-bezier(0.16, 1, 0.3, 1) !important;
+}
+
+.kokonut-btn:hover:not(:disabled), .icon-btn:hover:not(:disabled) {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 14px rgba(16, 185, 129, 0.25);
+}
+
+.kokonut-btn:active:not(:disabled) {
+    transform: translateY(0px) scale(0.98);
+}
+
+.user-card.kokonut-card {
+    background: rgba(0, 0, 0, 0.42) !important;
+    border: 1px solid rgba(255, 255, 255, 0.07) !important;
+    border-radius: 10px !important;
+    transition: background 0.2s ease, border-color 0.2s ease, transform 0.15s ease;
+}
+
+.user-card.kokonut-card:hover {
+    background: rgba(16, 185, 129, 0.08) !important;
+    border-color: rgba(16, 185, 129, 0.3) !important;
+}
+
+.yt-queue-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 7px 10px;
+    border-radius: 7px;
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid transparent;
+    font-size: 12px;
+    transition: all 0.15s ease;
+}
+
+.yt-queue-item:hover {
+    background: rgba(255, 255, 255, 0.07);
+    border-color: rgba(16, 185, 129, 0.25);
+}
+
+.yt-queue-item.active-queue-item {
+    background: rgba(16, 185, 129, 0.16) !important;
+    border-color: var(--accent-main) !important;
+    color: var(--accent-main);
+    font-weight: bold;
+}
+
+.user-chat-line {
+    background: rgba(255, 255, 255, 0.025);
+    padding: 8px 10px;
+    border-radius: 10px;
+    border: 1px solid rgba(255, 255, 255, 0.04);
+    animation: chatSlideIn 0.18s ease-out;
+}
+
+@keyframes chatSlideIn {
+    from { opacity: 0; transform: translateY(6px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+input[type="range"].kokonut-slider {
+    accent-color: var(--accent-main);
+    cursor: pointer;
+}

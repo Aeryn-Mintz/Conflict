@@ -1,7 +1,8 @@
 {
   "name": "conflict",
-  "version": "1.18.1",
+  "version": "1.18.8",
   "description": "Secure P2P Comms, VTT & Virtual LAN",
+  "author": "Aeryn-Mintz",
   "main": "js/main.js",
   "scripts": {
     "start": "electron .",
@@ -22,6 +23,13 @@
   "build": {
     "appId": "com.aerynmintz.conflict",
     "productName": "Conflict",
+    "publish": [
+      {
+        "provider": "github",
+        "owner": "Aeryn-Mintz",
+        "repo": "conflict"
+      }
+    ],
     "asarUnpack": [
       "node_modules/@sapphi-red/web-noise-suppressor/**/*",
       "bin/**/*"
@@ -29,6 +37,7 @@
     "win": {
       "target": "nsis",
       "icon": "conflict-logo.png",
+      "artifactName": "${productName}-Setup-${version}.${ext}",
       "requestedExecutionLevel": "requireAdministrator",
       "extraResources": [
         {
