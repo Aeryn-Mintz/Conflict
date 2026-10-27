@@ -28,17 +28,23 @@ function rememberMessage(msgStr) {
     setTimeout(() => recentMessages.delete(msgStr), 1200);
 }
 
-function publishToMesh(topic, msgStr) {
-    let sent = false;
-    mqttClients.forEach(client => {
-        if (client && client.connected) {
-            try {
-                client.publish(topic, msgStr, { qos: 0 });
-                sent = true;
-            } catch (e) {}
-        }
-    });
-    return sent;
+function publishToMesh(topic, msgStr, maxCopies = Infinity) {
+    let sentCount = 0;
+
+    for (const client of mqttClients) {
+        if (!client || !client.connected) continue;
+
+        try {
+            client.publish(topic, msgStr, { qos: 0 });
+            sentCount++;
+
+            // High-frequency voice frames do not need to be mirrored to every
+            // broker. Keep limited redundancy while avoiding a 4x bandwidth multiplier.
+            if (sentCount >= maxCopies) break;
+        } catch (e) {}
+    }
+
+    return sentCount > 0;
 }
 
 function startLocalServer(baseDir) {
@@ -104,7 +110,9 @@ function startLocalServer(baseDir) {
                 if (client !== ws && client.readyState === WebSocket.OPEN) client.send(msgStr); 
             });
             
-            const sent = publishToMesh(currentRoomTopic, msgStr);
+            // Voice is latency- and bandwidth-sensitive: mirror it to at most two brokers.
+            // Other control/chat messages retain the existing multi-broker redundancy.
+            const sent = publishToMesh(currentRoomTopic, msgStr, isVoiceFrame ? 2 : Infinity);
 
             if (!sent && !isVoiceFrame && pendingOutboundQueue.length < 30) {
                 pendingOutboundQueue.push(msgStr);
