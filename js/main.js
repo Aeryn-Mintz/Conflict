@@ -1,11 +1,24 @@
 const { app, BrowserWindow, ipcMain, desktopCapturer, session, shell, Tray, Menu } = require('electron');
 const { autoUpdater } = require('electron-updater');
-const { spawn, exec } = require('child_process');
+const { spawn, exec, execFile } = require('child_process');
 const path = require('path');
 const https = require('https');
 const fs = require('fs');
 const os = require('os');
 const { startLocalServer, stopServer, joinSwarmRoom, leaveSwarmRoom, scanOpenRooms, getActiveRoomCode } = require('./server');
+
+// Do not allow repeated launches to create a new Electron process tree each time.
+const hasSingleInstanceLock = app.requestSingleInstanceLock();
+if (!hasSingleInstanceLock) {
+    app.quit();
+} else {
+    app.on('second-instance', () => {
+        if (!mainWindow || mainWindow.isDestroyed()) return;
+        if (mainWindow.isMinimized()) mainWindow.restore();
+        if (!mainWindow.isVisible()) mainWindow.show();
+        mainWindow.focus();
+    });
+}
 
 process.on('uncaughtException', (err) => {
     console.warn('[Background Warning]:', err?.message || err);
@@ -255,13 +268,16 @@ function stopN2NNetwork() {
     }
     currentEdgeRoom = null;
     if (edgeProcess) {
-        try { edgeProcess.kill(); } catch (e) {}
+        const child = edgeProcess;
         edgeProcess = null;
-    }
-    if (isWin) {
-        exec('taskkill /F /IM edge.exe /T', () => {});
-    } else if (isLinux) {
-        exec('pkill -f "edge -c cfl_"', () => {});
+
+        // Only terminate the edge.exe tree started by this app instance.
+        // Image-wide taskkill/pkill can terminate another session's process.
+        if (isWin && child.pid) {
+            execFile('taskkill', ['/F', '/PID', String(child.pid), '/T'], () => {});
+        } else {
+            try { child.kill(); } catch (e) {}
+        }
     }
     updateTrayMenu();
 }
@@ -279,6 +295,8 @@ ipcMain.on('download-radmin', () => {
 });
 
 app.whenReady().then(() => {
+    if (!hasSingleInstanceLock) return;
+
     const rootDir = fs.existsSync(path.join(__dirname, 'index.html')) ? __dirname : path.join(__dirname, '..');
     startLocalServer(rootDir);
 
@@ -375,8 +393,24 @@ app.whenReady().then(() => {
     });
 });
 
+let appCleanupStarted = false;
+function cleanupAppResources() {
+    if (appCleanupStarted) return;
+    appCleanupStarted = true;
+
+    stopN2NNetwork();
+    leaveSwarmRoom();
+    stopServer();
+
+    if (tray) {
+        try { tray.destroy(); } catch (e) {}
+        tray = null;
+    }
+}
+
 app.on('before-quit', () => {
     app.isQuiting = true;
+    cleanupAppResources();
 });
 
 app.on('window-all-closed', () => { 
