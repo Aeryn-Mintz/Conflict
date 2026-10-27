@@ -194,8 +194,12 @@
 
         <div id="main-choices">
             <div style="text-align: left; margin-bottom: 16px;">
-                <div style="font-size: 11px; font-weight: 800; color: rgba(255,255,255,0.6); text-transform: uppercase; letter-spacing: 0.8px; margin-bottom: 8px; display: flex; justify-content: space-between;">
+                <div style="font-size: 11px; font-weight: 800; color: rgba(255,255,255,0.6); text-transform: uppercase; letter-spacing: 0.8px; margin-bottom: 8px; display: flex; justify-content: space-between; align-items: center; gap: 10px;">
                     <span id="saved-networks-title">🌐 My Saved Networks</span>
+                    <label style="display: flex; align-items: center; gap: 5px; font-size: 10px; font-weight: 600; text-transform: none; letter-spacing: 0; cursor: pointer;">
+                        <input type="checkbox" id="auto-connect-network" style="margin: 0; accent-color: #10b981;">
+                        Auto-connect last network at startup
+                    </label>
                 </div>
                 <div id="saved-networks-list" class="kokonut-scroll" style="display: flex; flex-direction: column; gap: 8px; max-height: 185px; overflow-y: auto; padding-right: 2px;"></div>
             </div>
@@ -274,6 +278,14 @@
 
         function getSavedNetworks() {
             try { return JSON.parse(localStorage.getItem('conflict_networks') || '[]'); } catch (e) { return []; }
+        }
+
+        const autoConnectToggle = document.getElementById('auto-connect-network');
+        if (autoConnectToggle) {
+            autoConnectToggle.checked = localStorage.getItem('conflictAutoConnectNetwork') === 'true';
+            autoConnectToggle.addEventListener('change', () => {
+                localStorage.setItem('conflictAutoConnectNetwork', String(autoConnectToggle.checked));
+            });
         }
 
         function saveNetworkToStorage(code, name) {
@@ -397,11 +409,12 @@
             ipcRenderer.invoke('get-network-status').then((status) => {
                 if (status && status.virtualIp) currentVirtualIp = status.virtualIp;
                 const savedActive = JSON.parse(localStorage.getItem('conflictActiveNetwork') || 'null');
+                const autoConnect = localStorage.getItem('conflictAutoConnectNetwork') === 'true';
 
                 if (status && status.activeRoomCode) {
                     currentActiveRoomCode = status.activeRoomCode;
                     window.renderSavedNetworks();
-                } else if (savedActive && savedActive.code) {
+                } else if (savedActive && savedActive.code && autoConnect) {
                     currentActiveRoomCode = savedActive.code;
                     ipcRenderer.invoke('ensure-network', {
                         roomCode: savedActive.code,
@@ -413,6 +426,8 @@
                         window.renderSavedNetworks();
                     });
                 } else {
+                    // Do not check/install network drivers or start the virtual LAN at launch
+                    // unless auto-connect is enabled or the user explicitly joins a network.
                     window.renderSavedNetworks();
                 }
             });
