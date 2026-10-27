@@ -4,10 +4,14 @@
 
 if (typeof require !== 'undefined') { window.ipcRenderer = require('electron').ipcRenderer; }
 
-window.myId = Math.random().toString(36).substring(2, 15);
+window.myId = localStorage.getItem('conflictPersistentUid') || Math.random().toString(36).substring(2, 15);
+localStorage.setItem('conflictPersistentUid', window.myId);
+
 window.peerNames = {};
 window.peerAvatars = {};
 window.peerIps = {};
+window.peerInCall = {};
+window.inVoiceCall = false;
 window.myVirtualIp = '10.66.0.x';
 window.defaultAvatar = './Banaya.png';
 window.partySheets = {};
@@ -23,21 +27,74 @@ if (window.ipcRenderer) {
         }
     }).catch(() => {});
 }
+// ==========================================
+// POLYPHONIC MIDI / SYNTH UI SOUND ENGINE
+// ==========================================
+window.playUiSound = function(type) {
+    try {
+        const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+        if (!window.uiAudioCtx) window.uiAudioCtx = new AudioContextClass();
+        const ctx = window.uiAudioCtx;
+        if (ctx.state === 'suspended') ctx.resume();
 
-// 1. ELECTRON IPC (AUTO-UPDATER)
-if (window.ipcRenderer) {
-    window.ipcRenderer.on('update_available', () => {
-        const overlay = document.getElementById('update-overlay'); if (overlay) overlay.style.display = 'flex';
-        const msg = document.getElementById('update-msg'); if (msg) msg.innerText = 'Downloading update...';
-    });
-    window.ipcRenderer.on('download_progress', (event, percent) => {
-        const bar = document.getElementById('update-progress-bar'); if (bar) bar.style.width = percent + '%';
-    });
-    window.ipcRenderer.on('update_downloaded', () => {
-        const msg = document.getElementById('update-msg'); if (msg) msg.innerText = 'Update ready! Restarting in 3 seconds...';
-        setTimeout(() => { window.ipcRenderer.send('restart_app'); }, 3000);
-    });
-}
+        const playNote = (freq, startOffset, duration, vol = 0.08, wave = 'sine') => {
+            const now = ctx.currentTime + startOffset;
+            const osc = ctx.createOscillator();
+            const sub = ctx.createOscillator();
+            const gain = ctx.createGain();
+
+            osc.type = wave;
+            osc.frequency.setValueAtTime(freq, now);
+
+            // Soft harmonic overtone for warm MIDI bell texture
+            sub.type = 'triangle';
+            sub.frequency.setValueAtTime(freq * 2, now);
+
+            gain.gain.setValueAtTime(0.0001, now);
+            gain.gain.linearRampToValueAtTime(vol, now + 0.012);
+            gain.gain.exponentialRampToValueAtTime(0.0001, now + duration);
+
+            const subGain = ctx.createGain();
+            subGain.gain.setValueAtTime(vol * 0.25, now);
+            subGain.gain.exponentialRampToValueAtTime(0.0001, now + duration * 0.7);
+
+            osc.connect(gain);
+            sub.connect(subGain);
+            subGain.connect(gain);
+            gain.connect(ctx.destination);
+
+            osc.start(now);
+            sub.start(now);
+            osc.stop(now + duration + 0.02);
+            sub.stop(now + duration + 0.02);
+        };
+
+        if (type === 'join_call') {
+            // Ascending Discord-style warm major 9th arpeggio (F4 -> A4 -> C5 -> G5)
+            playNote(349.23, 0.00, 0.22, 0.09, 'sine');
+            playNote(440.00, 0.06, 0.22, 0.09, 'sine');
+            playNote(523.25, 0.12, 0.26, 0.10, 'sine');
+            playNote(783.99, 0.18, 0.38, 0.08, 'sine');
+        } else if (type === 'leave_call') {
+            // Descending warm chime (E5 -> C5 -> G4)
+            playNote(659.25, 0.00, 0.18, 0.08, 'sine');
+            playNote(523.25, 0.07, 0.18, 0.08, 'sine');
+            playNote(392.00, 0.14, 0.32, 0.09, 'sine');
+        } else if (type === 'chat_in') {
+            // Crisp crystalline notification pluck (A5 -> E6)
+            playNote(880.00, 0.00, 0.12, 0.06, 'sine');
+            playNote(1318.51, 0.045, 0.22, 0.07, 'sine');
+        } else if (type === 'chat_out') {
+            // Subtle tactile send pop (E5)
+            playNote(659.25, 0.00, 0.09, 0.04, 'sine');
+        } else if (type === 'peer_join') {
+            // Soft radar presence chime (D5 -> A5)
+            playNote(587.33, 0.00, 0.18, 0.06, 'sine');
+            playNote(880.00, 0.08, 0.28, 0.06, 'sine');
+        }
+    } catch (e) {}
+};
+
 
 // 2. WEBSOCKET ROUTER (NETWORK)
 let serverUrl = localStorage.getItem('conflictServerUrl');
@@ -49,48 +106,87 @@ if (!serverUrl) {
 
 window.socket = new WebSocket(serverUrl);
 window.hasAnnouncedJoin = false;
+window.presenceHeartbeat = null;
 
-window.announceRoomJoin = async function() {
-    if (window.hasAnnouncedJoin || !window.socket || window.socket.readyState !== WebSocket.OPEN) return;
-    window.hasAnnouncedJoin = true;
-
-    if (window.ipcRenderer) {
-        try {
-            const ip = await window.ipcRenderer.invoke('get-virtual-ip');
-            if (ip) window.myVirtualIp = ip;
-        } catch (e) {}
-    }
+window.sendJoinPacket = function() {
+    if (!window.socket || window.socket.readyState !== WebSocket.OPEN) return;
     const username = document.getElementById('display-username')?.textContent || localStorage.getItem('appUsername') || 'User';
-    const avatar = localStorage.getItem('appAvatar') || window.defaultAvatar;
+    const activeNet = JSON.parse(localStorage.getItem('conflictActiveNetwork') || '{}');
+
+    // Pacote leve (< 200 bytes) para atravessar qualquer broker MQTT instantaneamente!
     window.socket.send(JSON.stringify({
         action: 'join',
         userId: window.myId,
         username: username,
-        avatar: avatar,
-        virtualIp: window.myVirtualIp
+        virtualIp: window.myVirtualIp,
+        inCall: window.inVoiceCall,
+        roomCode: activeNet.code || 'DEFAULT',
+        ts: Date.now()
     }));
-    if (window.addChatLine) window.addChatLine('System', `Connected to the room server (LAN IP: ${window.myVirtualIp}).`, 'system');
+};
+
+window.announceRoomJoin = async function() {
+    if (!window.socket || window.socket.readyState !== WebSocket.OPEN) return;
+
+    const activeNet = JSON.parse(localStorage.getItem('conflictActiveNetwork') || '{"code":"DEFAULT","name":"Network"}');
+    const username = document.getElementById('display-username')?.textContent || localStorage.getItem('appUsername') || 'User';
+
+    if (window.ipcRenderer) {
+        try {
+            const res = await window.ipcRenderer.invoke('ensure-network', {
+                roomCode: activeNet.code || 'DEFAULT',
+                roomName: activeNet.name || `Network #${activeNet.code}`,
+                hostName: username
+            });
+            if (res && res.virtualIp) window.myVirtualIp = res.virtualIp;
+        } catch (e) {}
+    }
+
+    window.sendJoinPacket();
+
+    if (!window.hasAnnouncedJoin) {
+        window.hasAnnouncedJoin = true;
+        if (window.addChatLine) {
+            window.addChatLine('System', `🌐 Connected to Network **${activeNet.name || activeNet.code || 'LAN'}** (Your Static LAN IP: ${window.myVirtualIp}).`, 'system');
+        }
+        if (window.renderConnectedUsers) window.renderConnectedUsers();
+
+        // Repete o sinal de presença a cada 4 segundos para sincronizar amigos que entraram juntos
+        if (window.presenceHeartbeat) clearInterval(window.presenceHeartbeat);
+        window.presenceHeartbeat = setInterval(() => {
+            if (window.socket && window.socket.readyState === WebSocket.OPEN) {
+                const currentName = document.getElementById('display-username')?.textContent || localStorage.getItem('appUsername') || 'User';
+                window.socket.send(JSON.stringify({
+                    action: 'presence',
+                    targetId: null,
+                    userId: window.myId,
+                    username: currentName,
+                    virtualIp: window.myVirtualIp,
+                    inCall: window.inVoiceCall,
+                    ts: Date.now()
+                }));
+            }
+        }, 4000);
+    }
 };
 
 if (window.ipcRenderer) {
     window.ipcRenderer.on('n2n-status', () => {
-        if (window.addChatLine) window.addChatLine('System', `🌐 Virtual LAN (${window.myVirtualIp}) ativa e pronta para jogos!`, 'system');
+        if (window.addChatLine) window.addChatLine('System', `🌐 Virtual LAN (${window.myVirtualIp}) active and ready for games!`, 'system');
     });
 }
 
 window.socket.onopen = () => {
-    setTimeout(() => window.announceRoomJoin(), 400);
+    window.announceRoomJoin();
 };
 
 window.socket.onerror = () => {
     if (window.addChatLine) window.addChatLine('System', '⚠️ Could not connect to signaling server. Features requiring network routing may fail.', 'system');
 };
-
 window.socket.onmessage = async (event) => {
     let data;
     try { data = JSON.parse(event.data); } catch (e) { return; }
 
-    // Rota prioritária de baixa latência para a Ponte de Voz Anti-CGNAT
     if (data.action === 'voice_frame') {
         if (window.handleVoiceFrame) window.handleVoiceFrame(data);
         return;
@@ -100,11 +196,33 @@ window.socket.onmessage = async (event) => {
         window.announceRoomJoin();
         return;
     }
+
+if (data.action === 'call_state' && data.userId !== window.myId) {
+        const wasInCall = !!window.peerInCall[data.userId];
+        window.peerInCall[data.userId] = !!data.inCall;
+        if (wasInCall !== !!data.inCall && window.playUiSound) {
+            window.playUiSound(data.inCall ? 'join_call' : 'leave_call');
+        }
+        if (!data.inCall) {
+            document.querySelectorAll(`.stream-${data.userId}`).forEach(el => {
+                if (el.id && el.id.startsWith('video-container-')) el.remove();
+            });
+        }
+        if (window.renderConnectedUsers) window.renderConnectedUsers();
+        if (window.addChatLine) {
+            const pName = window.peerNames[data.userId] || 'A friend';
+            window.addChatLine('System', data.inCall ? `🎙️ **${pName}** joined the Voice Channel.` : `📴 **${pName}** left the Voice Channel.`, 'system');
+        }
+        return;
+    }
     
     if (data.action === 'join' && data.userId !== window.myId) {
+        const isFirstSeen = !window.peerNames[data.userId];
         window.peerNames[data.userId] = data.username || "Guest";
         window.peerAvatars[data.userId] = data.avatar || window.defaultAvatar;
         if (data.virtualIp) window.peerIps[data.userId] = data.virtualIp;
+        if (data.inCall !== undefined) window.peerInCall[data.userId] = !!data.inCall;
+        if (isFirstSeen && window.playUiSound) window.playUiSound('peer_join');
         if (window.createPeerConnection && !window.peers[data.userId]) window.createPeerConnection(data.userId);
         if (window.renderConnectedUsers) window.renderConnectedUsers();
         
@@ -113,12 +231,16 @@ window.socket.onmessage = async (event) => {
             targetId: data.userId,
             userId: window.myId,
             username: document.getElementById('display-username')?.textContent || localStorage.getItem('appUsername') || 'Guest',
-            avatar: localStorage.getItem('appAvatar') || window.defaultAvatar,
-            virtualIp: window.myVirtualIp
+            virtualIp: window.myVirtualIp,
+            inCall: window.inVoiceCall
         }));
+
+        // Sync YouTube queue, current video, and exact timestamp to ANY new user who joins!
+        if (window.ytQueue && window.ytQueue.length > 0 && window.sendFullYtSync) {
+            window.sendFullYtSync(data.userId);
+        }
         
         if (window.isDM) {
-            if (window.ytQueue && window.ytQueue.length > 0) window.socket.send(JSON.stringify({ action: 'yt_sync', targetId: data.userId, queue: window.ytQueue, index: window.currentQueueIndex }));
             window.socket.send(JSON.stringify({ action: 'set_campaign_system', system: document.getElementById('rpg-system-select')?.value || 'dnd' }));
             if (window.initiativeList && window.initiativeList.length > 0) window.socket.send(JSON.stringify({ action: 'sync_initiative', list: window.initiativeList, turn: window.initiativeTurn }));
         }
@@ -128,6 +250,7 @@ window.socket.onmessage = async (event) => {
         window.peerNames[data.userId] = data.username || "Guest";
         window.peerAvatars[data.userId] = data.avatar || window.defaultAvatar;
         if (data.virtualIp) window.peerIps[data.userId] = data.virtualIp;
+        if (data.inCall !== undefined) window.peerInCall[data.userId] = !!data.inCall;
         if (window.createPeerConnection && !window.peers[data.userId]) window.createPeerConnection(data.userId);
         if (window.renderConnectedUsers) window.renderConnectedUsers();
     }
@@ -147,8 +270,14 @@ window.socket.onmessage = async (event) => {
     else if (data.action === 'claim_dm') { if(window.addChatLine) window.addChatLine('System', `👑 ${data.username} is now the Dungeon Master.`, 'system'); const dmBtn = document.getElementById('claim-dm-btn'); if (data.userId !== window.myId && dmBtn) { dmBtn.innerText = `👑 DM: ${data.username}`; dmBtn.disabled = true; dmBtn.style.borderColor = "var(--border-color)"; dmBtn.style.color = "var(--text-muted)"; } }
     else if (data.action === 'release_dm') { if(window.addChatLine) window.addChatLine('System', `👑 The Dungeon Master role is now open.`, 'system'); const dmBtn = document.getElementById('claim-dm-btn'); if(dmBtn) { dmBtn.innerText = `👑 Claim DM`; dmBtn.disabled = false; dmBtn.style.borderColor = "#fbbf24"; dmBtn.style.color = "#fbbf24"; } }
     
-    else if (data.action === 'chat_message') { if(window.addChatLine) window.addChatLine(data.username || 'Guest', data.text || '', data.type || 'normal', data.avatar || window.peerAvatars[data.userId]); }
-    else if (data.action === 'dice_chat_message') { if(window.addChatLine) window.addChatLine(data.username || 'Guest', data.text || '', 'dice', data.avatar || window.peerAvatars[data.userId]); }
+else if (data.action === 'chat_message') {
+        if (data.userId !== window.myId && window.playUiSound) window.playUiSound('chat_in');
+        if (window.addChatLine) window.addChatLine(data.username || 'Guest', data.text || '', data.type || 'normal', data.avatar || window.peerAvatars[data.userId]);
+    }
+    else if (data.action === 'dice_chat_message') {
+        if (data.userId !== window.myId && window.playUiSound) window.playUiSound('chat_in');
+        if (window.addChatLine) window.addChatLine(data.username || 'Guest', data.text || '', 'dice', data.avatar || window.peerAvatars[data.userId]);
+    }
     else if (data.action === 'dice_roll' && data.userId !== window.myId && window.animateDiceRoll2D) { 
         let mainSide = 20; if (Array.isArray(data.type)) { mainSide = parseInt(data.type[0].replace(/\D/g, '')) || 20; } else if (typeof data.type === 'string') { mainSide = parseInt(data.type.replace(/\D/g, '')) || 20; } 
         window.animateDiceRoll2D(data.results, data.type, data.customClasses); if (data.results.includes(mainSide) && window.triggerFireworks) window.triggerFireworks(); 
@@ -167,19 +296,49 @@ window.socket.onmessage = async (event) => {
     else if (data.action === 'canvas_draw' && data.userId !== window.myId && window.remoteDraw) window.remoteDraw(data);
     else if (data.action === 'canvas_clear' && data.userId !== window.myId && window.ctx) window.ctx.clearRect(0, 0, 8000, 8000);
     
-    else if (data.action === 'yt_load') { window.ytQueue.unshift({ id: data.videoId, title: data.title || `Video (${data.videoId})` }); if(window.loadAndPlayVideo) window.loadAndPlayVideo(data.videoId, 0); }
-    else if (data.action === 'yt_queue_add') { window.ytQueue.push({ id: data.videoId, title: data.title || `Video (${data.videoId})` }); if(window.renderQueueUI) window.renderQueueUI(); }
-    else if (data.action === 'yt_skip' || data.action === 'yt_jump') { window.currentQueueIndex = data.action === 'yt_jump' ? data.index : window.currentQueueIndex + 1; if (window.ytQueue[window.currentQueueIndex] && window.loadAndPlayVideo) window.loadAndPlayVideo(window.ytQueue[window.currentQueueIndex].id, window.currentQueueIndex); }
-    else if (data.action === 'yt_pause') { if (window.ytPlayer && window.ytPlayer.getPlayerState() !== YT.PlayerState.PAUSED) window.ytPlayer.pauseVideo(); }
-    else if (data.action === 'yt_play') { if (window.ytPlayer && window.ytPlayer.getPlayerState() !== YT.PlayerState.PLAYING) window.ytPlayer.playVideo(); }
-    else if (data.action === 'yt_remove') { if (window.removeFromQueue) window.removeFromQueue(data.index, false); }
-    else if (data.action === 'yt_sync' && (data.targetId === window.myId || !data.targetId)) { 
-        window.ytQueue = data.queue; window.currentQueueIndex = data.index; if (window.renderQueueUI) window.renderQueueUI(); 
-        if (window.currentQueueIndex >= 0 && window.ytQueue[window.currentQueueIndex] && window.loadAndPlayVideo) { window.loadAndPlayVideo(window.ytQueue[window.currentQueueIndex].id, window.currentQueueIndex); } 
+else if (data.action === 'yt_request_sync' && data.userId !== window.myId) {
+        if (window.ytQueue && window.ytQueue.length > 0 && window.sendFullYtSync) {
+            window.sendFullYtSync(data.userId);
+        }
+    }
+    else if (data.action === 'yt_state' && data.userId !== window.myId) {
+        if (window.handleIncomingYtState) window.handleIncomingYtState(data);
+    }
+    else if (data.action === 'yt_load') {
+        window.ytQueue.unshift({ id: data.videoId, title: data.title || `Video (${data.videoId})` });
+        if (window.loadAndPlayVideo) window.loadAndPlayVideo(data.videoId, 0, 0, true);
+    }
+    else if (data.action === 'yt_queue_add') {
+        window.ytQueue.push({ id: data.videoId, title: data.title || `Video (${data.videoId})` });
+        if (window.currentQueueIndex === -1) {
+            window.currentQueueIndex = 0;
+            if (window.loadAndPlayVideo) window.loadAndPlayVideo(data.videoId, 0, 0, true);
+        } else if (window.renderQueueUI) {
+            window.renderQueueUI();
+        }
+    }
+    else if (data.action === 'yt_skip' || data.action === 'yt_jump') {
+        const nextIdx = data.action === 'yt_jump' ? data.index : (window.currentQueueIndex + 1);
+        if (nextIdx !== window.currentQueueIndex && window.ytQueue[nextIdx]) {
+            window.currentQueueIndex = nextIdx;
+            if (window.loadAndPlayVideo) window.loadAndPlayVideo(window.ytQueue[nextIdx].id, nextIdx, 0, true);
+        }
+    }
+    else if (data.action === 'yt_pause') {
+        if (window.handleIncomingYtState) window.handleIncomingYtState({ ...data, state: 'pause' });
+    }
+    else if (data.action === 'yt_play') {
+        if (window.handleIncomingYtState) window.handleIncomingYtState({ ...data, state: 'play' });
+    }
+    else if (data.action === 'yt_remove') {
+        if (window.removeFromQueue) window.removeFromQueue(data.index, false);
+    }
+    else if (data.action === 'yt_sync' && (data.targetId === window.myId || !data.targetId)) {
+        if (window.applyIncomingYtSync) window.applyIncomingYtSync(data);
     }
 };
 
-// 3. UI, SETTINGS & HARDWARE ENGINE
+// 3. UI, SETTINGS & NETWORK SWITCHER ENGINE
 window.makeDraggable = function(el) {
     const handle = el.querySelector('.drag-handle'); if (!handle) return;
     let isDragging = false, startX, startY, initialX, initialY;
@@ -206,10 +365,13 @@ window.renderConnectedUsers = function() {
     
     listEl.innerHTML = '';
     const userIds = Object.keys(window.peerNames);
-    titleEl.innerText = `👥 Connected Users (${userIds.length + 1})`; 
+    titleEl.innerText = `👥 Network Members (${userIds.length + 1})`; 
     
     const myName = document.getElementById('display-username')?.textContent || localStorage.getItem('appUsername') || 'You';
     const myAvatar = localStorage.getItem('appAvatar') || window.defaultAvatar;
+    const myCallBadge = window.inVoiceCall
+        ? `<span style="font-size:10px; color:#10b981; font-weight:bold;">🎙️ In Call</span>`
+        : `<span style="font-size:10px; color:var(--text-muted);">🎮 LAN Only</span>`;
     
     const localRow = document.createElement('div');
     localRow.className = 'user-card kokonut-card';
@@ -218,31 +380,115 @@ window.renderConnectedUsers = function() {
         <div style="display:flex; align-items:center; gap:10px;">
             <img src="${myAvatar}" style="width:30px; height:30px; border-radius:50%; object-fit:cover; border:2px solid var(--accent-main);">
             <div>
-                <div style="font-size:13px; font-weight:bold; color: var(--accent-main);">${myName} (You)</div>
+                <div style="font-size:13px; font-weight:bold; color: var(--accent-main);">${myName} (You) • ${myCallBadge}</div>
                 <div style="font-size:10px; font-family:monospace; color:var(--text-muted); cursor:pointer;" onclick="navigator.clipboard.writeText('${window.myVirtualIp}')" title="Click to copy your LAN IP">🌐 ${window.myVirtualIp} 📋</div>
             </div>
         </div>`;
     listEl.appendChild(localRow);
 
+    const activeCallNames = [];
+    if (window.inVoiceCall) activeCallNames.push(`${myName} (You)`);
+
     userIds.forEach(uid => {
         const peerIp = window.peerIps[uid] || '10.66.0.x';
+        const isPeerInCall = !!window.peerInCall[uid];
+        if (isPeerInCall) activeCallNames.push(window.peerNames[uid]);
+
+        const callBadge = isPeerInCall
+            ? `<span style="font-size:10px; color:#10b981; font-weight:bold;">🎙️ In Call</span>`
+            : `<span style="font-size:10px; color:var(--text-muted);">🎮 LAN Only</span>`;
+
         const row = document.createElement('div');
         row.className = 'user-card kokonut-card';
         row.style.cssText = 'display:flex; justify-content:space-between; align-items:center; padding:8px;';
         row.innerHTML = `
             <div style="display:flex; align-items:center; gap:10px;">
-                <img src="${window.peerAvatars[uid] || window.defaultAvatar}" style="width:30px; height:30px; border-radius:50%; object-fit:cover; border:1px solid var(--border-color);">
+                <img src="${window.peerAvatars[uid] || window.defaultAvatar}" style="width:30px; height:30px; border-radius:50%; object-fit:cover; border:1px solid ${isPeerInCall ? '#10b981' : 'var(--border-color)'};">
                 <div>
-                    <div style="font-size:13px; font-weight:bold;">${window.peerNames[uid]}</div>
+                    <div style="font-size:13px; font-weight:bold;">${window.peerNames[uid]} • ${callBadge}</div>
                     <div style="font-size:10px; font-family:monospace; color:#10b981; cursor:pointer;" onclick="navigator.clipboard.writeText('${peerIp}')" title="Click to copy Friend's LAN IP">🌐 ${peerIp} 📋</div>
                 </div>
             </div>
             <button class="icon-btn kokonut-btn btn-vol" data-uid="${uid}" style="font-size:16px;" title="Adjust Volume">🔊</button>`;
         listEl.appendChild(row);
     });
+
+    // Update the Voice Channel Lobby banner inside Live Stage so users know who is waiting in the call
+    let lobbyBanner = document.getElementById('call-lobby-banner');
+    const actionRow = document.querySelector('#video-grid .action-row');
+    if (actionRow && !lobbyBanner) {
+        lobbyBanner = document.createElement('div');
+        lobbyBanner.id = 'call-lobby-banner';
+        lobbyBanner.style.cssText = 'font-size:12px; padding:8px 12px; border-radius:6px; background:rgba(0,0,0,0.35); border:1px solid var(--border-color); margin-bottom:10px;';
+        actionRow.parentNode.insertBefore(lobbyBanner, actionRow.nextSibling);
+    }
+    if (lobbyBanner) {
+        if (activeCallNames.length === 0) {
+            lobbyBanner.innerHTML = `<span style="color:var(--text-muted);">🔇 Voice Channel is empty — LAN is active (${userIds.length + 1} online). Click <strong>Join Call</strong> anytime to talk!</span>`;
+        } else {
+            lobbyBanner.innerHTML = `<span style="color:#10b981; font-weight:bold;">🎙️ In Voice Channel (${activeCallNames.length}):</span> <span style="color:var(--text-main);">${activeCallNames.join(', ')}</span>`;
+        }
+    }
+};
+
+window.buildSidebarNetworkSwitcher = function() {
+    const sidebar = document.querySelector('.sidebar');
+    if (!sidebar || document.getElementById('network-switcher-box')) return;
+
+    const activeNet = JSON.parse(localStorage.getItem('conflictActiveNetwork') || '{"code":"ROOM","name":"Active Network"}');
+    const savedNets = JSON.parse(localStorage.getItem('conflict_networks') || '[]');
+
+    const netSection = document.createElement('div');
+    netSection.id = 'network-switcher-box';
+    netSection.className = 'sidebar-section';
+    netSection.style.cssText = 'border-bottom: 1px solid var(--border-color); padding-bottom: 12px; margin-bottom: 10px; transition: opacity 0.2s, filter 0.2s;';
+
+    let optionsHtml = '';
+    savedNets.forEach(n => {
+        const sel = (n.code === activeNet.code && n.name === activeNet.name) ? 'selected' : '';
+        optionsHtml += `<option value="${n.code}|||${n.name}" ${sel}>🌐 ${n.name} (${n.code})</option>`;
+    });
+
+    netSection.innerHTML = `
+        <h4 style="margin-bottom:6px;">Active Network</h4>
+        <select id="quick-network-select" class="config-select kokonut-select" style="width:100%; margin-bottom:6px; font-weight:bold; font-size:12px; border-color:var(--border-color) !important; box-shadow:none !important; outline:none !important;">
+            ${optionsHtml}
+        </select>
+        <div style="display:flex; justify-content:space-between; align-items:center; font-size:11px; color:var(--text-muted); background:rgba(0,0,0,0.35); border:1px solid var(--border-color); padding:6px 8px; border-radius:6px; cursor:pointer;" id="copy-net-code-btn" title="Click to copy Network Name & Code for friends">
+            <span style="overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">Invite: <strong style="color:var(--text-main);">${activeNet.name}</strong> (<span style="color:var(--accent-main); font-family:monospace;">${activeNet.code}</span>)</span>
+            <span style="flex-shrink:0; margin-left:6px;">📋 Copy</span>
+        </div>
+    `;
+
+    const firstSection = sidebar.querySelector('.sidebar-section');
+    sidebar.insertBefore(netSection, firstSection);
+
+    document.getElementById('copy-net-code-btn')?.addEventListener('click', (e) => {
+        navigator.clipboard.writeText(`${activeNet.name} | ${activeNet.code}`);
+        const el = e.currentTarget;
+        const old = el.innerHTML;
+        el.innerHTML = `<span style="color:#10b981; font-weight:bold;">✓ Copied "${activeNet.name} | ${activeNet.code}"!</span>`;
+        setTimeout(() => { el.innerHTML = old; }, 1800);
+    });
+
+    document.getElementById('quick-network-select')?.addEventListener('change', (e) => {
+        e.target.blur();
+        const [newCode, newName] = e.target.value.split('|||');
+        const targetNet = savedNets.find(n => n.code === newCode && n.name === newName) || { code: newCode, name: newName };
+        if (!targetNet || !window.ipcRenderer) return;
+        localStorage.setItem('conflictActiveNetwork', JSON.stringify(targetNet));
+        window.ipcRenderer.send('connect-network', {
+            roomCode: targetNet.code,
+            roomName: targetNet.name,
+            hostName: localStorage.getItem('appUsername') || 'Player',
+            userId: window.myId
+        });
+        setTimeout(() => window.location.reload(), 150);
+    });
 };
 
 document.addEventListener('DOMContentLoaded', () => {
+    window.buildSidebarNetworkSwitcher();
     setTimeout(() => { if (window.renderConnectedUsers) window.renderConnectedUsers(); }, 500);
     if (window.makeDraggable) document.querySelectorAll('.floating-panel').forEach(window.makeDraggable);
     
@@ -270,14 +516,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     async function loadDevices() {
         try {
-            try {
-                const probe = await navigator.mediaDevices.getUserMedia({ audio: true, video: true });
-                probe.getTracks().forEach(t => t.stop());
-            } catch (e) {
-                try { const a = await navigator.mediaDevices.getUserMedia({ audio: true }); a.getTracks().forEach(t => t.stop()); } catch(e2) {}
-                try { const v = await navigator.mediaDevices.getUserMedia({ video: true }); v.getTracks().forEach(t => t.stop()); } catch(e2) {}
-            }
-
+            // Lista os dispositivos diretamente sem sequestrar o driver de áudio/vídeo!
             const devices = await navigator.mediaDevices.enumerateDevices();
             const audioIn  = document.getElementById('audio-in-select');
             const audioOut = document.getElementById('audio-out-select');
@@ -339,7 +578,8 @@ document.addEventListener('DOMContentLoaded', () => {
                     userId: window.myId,
                     username: newName,
                     avatar: localStorage.getItem('appAvatar'),
-                    virtualIp: window.myVirtualIp
+                    virtualIp: window.myVirtualIp,
+                    inCall: window.inVoiceCall
                 }));
             }
         }
@@ -454,13 +694,12 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
-   volSlider?.addEventListener('input', (e) => {
+    volSlider?.addEventListener('input', (e) => {
         if (!activeVolUid) return; 
         const vol = parseFloat(e.target.value);
         const uvName = document.getElementById('uv-name');
         if (uvName) uvName.innerText = `${window.peerNames[activeVolUid]}: ${Math.round(vol * 100)}%`;
 
-        // Aplica o volume diretamente (0% a 200%) no GainNode unificado do av.js
         if (window.remoteGainNodes && window.remoteGainNodes[activeVolUid]) {
             window.remoteGainNodes[activeVolUid].gain.setTargetAtTime(vol, window.audioCtx.currentTime, 0.01);
         }
@@ -484,7 +723,7 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     document.getElementById('leave-room-btn')?.addEventListener('click', () => { 
-        if (confirm('Disconnect from this room?')) {
+        if (confirm('Disconnect from this network and return to Network Hub?')) {
             if (window.ipcRenderer) window.ipcRenderer.send('leave-virtual-lan');
             window.location.href = 'index.html'; 
         }

@@ -6,13 +6,40 @@ const mqtt = require('mqtt');
 
 let wss = null; 
 let server = null;
-let mqttClient = null;
+let mqttClients = [];
+let currentRoomCode = null;
+let currentRoomTopic = 'conflict-room-DEFAULT';
 let currentHostInfo = null;
 let pendingOutboundQueue = [];
 
 const recentMessages = new Set();
 const RADAR_QUERY_TOPIC = 'conflict-global-radar-v1/query';
 const RADAR_RESPONSE_TOPIC = 'conflict-global-radar-v1/response';
+
+const MESH_BROKERS = [
+    'wss://broker.emqx.io:8084/mqtt',
+    'ws://broker.emqx.io:8083/mqtt',
+    'wss://broker.hivemq.com:8884/mqtt',
+    'ws://broker.hivemq.com:8000/mqtt'
+];
+
+function rememberMessage(msgStr) {
+    recentMessages.add(msgStr);
+    setTimeout(() => recentMessages.delete(msgStr), 1200);
+}
+
+function publishToMesh(topic, msgStr) {
+    let sent = false;
+    mqttClients.forEach(client => {
+        if (client && client.connected) {
+            try {
+                client.publish(topic, msgStr, { qos: 0 });
+                sent = true;
+            } catch (e) {}
+        }
+    });
+    return sent;
+}
 
 function startLocalServer(baseDir) {
     server = http.createServer((req, res) => {
@@ -52,84 +79,151 @@ function startLocalServer(baseDir) {
     wss = new WebSocket.Server({ server });
     
     wss.on('connection', (ws) => {
-        if (mqttClient && mqttClient.connected && mqttClient.roomTopic) {
-            ws.send(JSON.stringify({ action: 'room_ready', roomCode: mqttClient.roomCode }));
+        const isAnyConnected = mqttClients.some(c => c && c.connected);
+        if (isAnyConnected && currentRoomCode) {
+            ws.send(JSON.stringify({ action: 'room_ready', roomCode: currentRoomCode }));
         }
 
         ws.on('message', (msg) => {
             const msgStr = msg.toString();
-            
+            let isVoiceFrame = false;
+
             try {
                 const parsed = JSON.parse(msgStr);
+                isVoiceFrame = parsed.action === 'voice_frame';
                 if (currentHostInfo && (parsed.action === 'join' || parsed.action === 'presence')) {
+                    if (parsed.userId) currentHostInfo.userId = parsed.userId;
                     if (parsed.username) currentHostInfo.hostName = parsed.username;
-                    if (parsed.avatar) currentHostInfo.avatar = parsed.avatar;
+                    if (parsed.virtualIp) currentHostInfo.virtualIp = parsed.virtualIp;
                 }
             } catch (e) {}
 
-            recentMessages.add(msgStr);
-            setTimeout(() => recentMessages.delete(msgStr), 2000);
+            rememberMessage(msgStr);
             
             wss.clients.forEach(client => { 
                 if (client !== ws && client.readyState === WebSocket.OPEN) client.send(msgStr); 
             });
             
-            if (mqttClient && mqttClient.connected && mqttClient.roomTopic) {
-                mqttClient.publish(mqttClient.roomTopic, msgStr, { qos: 0 });
-            } else {
+            const sent = publishToMesh(currentRoomTopic, msgStr);
+
+            if (!sent && !isVoiceFrame && pendingOutboundQueue.length < 30) {
                 pendingOutboundQueue.push(msgStr);
             }
         });
     });
     
+    server.on('error', () => {});
     server.listen(8080, '127.0.0.1');
     return { server, wss };
 }
 
-async function joinSwarmRoom(roomCode, isHost = false, hostMeta = {}) {
-    return new Promise((resolve) => {
-        if (mqttClient) mqttClient.end(true);
-        
-        const cleanCode = roomCode.trim().toUpperCase();
-        const topic = `conflict-room-${cleanCode}`;
-        
-        currentHostInfo = isHost ? {
+function clearMeshClients() {
+    mqttClients.forEach(client => {
+        try { client.removeAllListeners(); client.end(true); } catch (e) {}
+    });
+    mqttClients = [];
+}
+
+function leaveSwarmRoom() {
+    currentRoomCode = null;
+    currentRoomTopic = 'conflict-room-DEFAULT';
+    currentHostInfo = null;
+    pendingOutboundQueue = [];
+    clearMeshClients();
+}
+
+function getActiveRoomCode() {
+    return currentRoomCode;
+}
+
+async function joinSwarmRoom(roomCode, isHost = true, hostMeta = {}) {
+    const cleanCode = String(roomCode || 'DEFAULT').trim().toUpperCase();
+    const slug = String(hostMeta.roomName || '').trim().toLowerCase().replace(/[^a-z0-9]/g, '').slice(0, 12);
+    const topicKey = hostMeta.netKey || (slug ? `${slug}_${cleanCode}` : cleanCode);
+    const topic = `conflict-room-${topicKey}`;
+
+    if (currentHostInfo) {
+        if (hostMeta.hostName) currentHostInfo.hostName = hostMeta.hostName;
+        if (hostMeta.roomName) currentHostInfo.roomName = hostMeta.roomName;
+        if (hostMeta.virtualIp) currentHostInfo.virtualIp = hostMeta.virtualIp;
+        if (hostMeta.userId) currentHostInfo.userId = hostMeta.userId;
+    } else {
+        currentHostInfo = {
             roomCode: cleanCode,
-            hostName: hostMeta.hostName || 'Host',
-            roomName: hostMeta.roomName || `Sala de ${hostMeta.hostName || 'RPG'}`,
-            avatar: hostMeta.avatar || './Banaya.png',
+            userId: hostMeta.userId || ('bg_' + Math.random().toString(36).slice(2, 10)),
+            hostName: hostMeta.hostName || 'Player',
+            roomName: hostMeta.roomName || `Network #${cleanCode}`,
+            virtualIp: hostMeta.virtualIp || '10.66.0.x',
+            avatar: './Banaya.png',
             createdAt: Date.now()
-        } : null;
+        };
+    }
 
-        mqttClient = mqtt.connect('mqtt://broker.emqx.io:1883', {
-            keepalive: 30,
-            reconnectPeriod: 2000
-        });
-        mqttClient.roomTopic = topic;
-        mqttClient.roomCode = cleanCode;
+    if (currentRoomTopic === topic && mqttClients.length > 0) {
+        if (mqttClients.some(c => c && c.connected) && wss) {
+            const readyMsg = JSON.stringify({ action: 'room_ready', roomCode: cleanCode });
+            wss.clients.forEach(client => {
+                if (client.readyState === WebSocket.OPEN) client.send(readyMsg);
+            });
+        }
+        return cleanCode;
+    }
 
-        mqttClient.on('connect', () => {
-            const topicsToSub = [topic];
-            if (isHost) topicsToSub.push(RADAR_QUERY_TOPIC);
+    clearMeshClients();
+    currentRoomCode = cleanCode;
+    currentRoomTopic = topic;
 
-            mqttClient.subscribe(topicsToSub, () => {
-                while (pendingOutboundQueue.length > 0) {
-                    const queuedMsg = pendingOutboundQueue.shift();
-                    mqttClient.publish(topic, queuedMsg);
+    MESH_BROKERS.forEach((brokerUrl) => {
+        let client;
+        try {
+            client = mqtt.connect(brokerUrl, {
+                clientId: `cfl_${cleanCode}_${Math.random().toString(16).slice(2, 10)}`,
+                protocolVersion: 4,
+                keepalive: 25,
+                connectTimeout: 8000,
+                reconnectPeriod: 3000,
+                clean: true
+            });
+        } catch (err) {
+            return;
+        }
+
+        client.on('error', () => {});
+
+        client.on('connect', () => {
+            const subs = [topic, RADAR_QUERY_TOPIC];
+
+            client.subscribe(subs, { qos: 0 }, (err) => {
+                if (err) return;
+
+                pendingOutboundQueue.forEach(queuedMsg => {
+                    try { client.publish(topic, queuedMsg, { qos: 0 }); } catch (e) {}
+                });
+
+                if (currentHostInfo) {
+                    const bgJoin = JSON.stringify({
+                        action: 'join',
+                        userId: currentHostInfo.userId,
+                        username: currentHostInfo.hostName,
+                        virtualIp: currentHostInfo.virtualIp,
+                        inCall: false,
+                        roomCode: cleanCode,
+                        ts: Date.now()
+                    });
+                    rememberMessage(bgJoin);
+                    try { client.publish(topic, bgJoin, { qos: 0 }); } catch (e) {}
                 }
 
                 if (wss) {
                     const readyMsg = JSON.stringify({ action: 'room_ready', roomCode: cleanCode });
-                    wss.clients.forEach(client => {
-                        if (client.readyState === WebSocket.OPEN) client.send(readyMsg);
+                    wss.clients.forEach(wsClient => {
+                        if (wsClient.readyState === WebSocket.OPEN) wsClient.send(readyMsg);
                     });
                 }
-
-                resolve(cleanCode);
             });
         });
 
-        mqttClient.on('message', (receivedTopic, message) => {
+        client.on('message', (receivedTopic, message) => {
             const msgStr = message.toString();
 
             if (receivedTopic === RADAR_QUERY_TOPIC && currentHostInfo) {
@@ -140,72 +234,109 @@ async function joinSwarmRoom(roomCode, isHost = false, hostMeta = {}) {
                         roomCode: currentHostInfo.roomCode,
                         hostName: currentHostInfo.hostName,
                         roomName: currentHostInfo.roomName,
-                        avatar: currentHostInfo.avatar
+                        avatar: './Banaya.png'
                     });
-                    mqttClient.publish(RADAR_RESPONSE_TOPIC, replyPayload);
+                    client.publish(RADAR_RESPONSE_TOPIC, replyPayload, { qos: 0 });
                 } catch (e) {}
                 return;
             }
 
-            if (receivedTopic === topic && wss) {
+            if (receivedTopic === topic) {
                 if (recentMessages.has(msgStr)) return;
+                rememberMessage(msgStr);
 
-                wss.clients.forEach(client => { 
-                    if (client.readyState === WebSocket.OPEN) client.send(msgStr); 
-                });
+                let hasActiveUiClient = false;
+                if (wss) {
+                    wss.clients.forEach(wsClient => { 
+                        if (wsClient.readyState === WebSocket.OPEN) {
+                            hasActiveUiClient = true;
+                            wsClient.send(msgStr);
+                        }
+                    });
+                }
+
+                if (!hasActiveUiClient && currentHostInfo) {
+                    try {
+                        const parsed = JSON.parse(msgStr);
+                        if (parsed.action === 'join' && parsed.userId !== currentHostInfo.userId) {
+                            const bgPresence = JSON.stringify({
+                                action: 'presence',
+                                targetId: parsed.userId,
+                                userId: currentHostInfo.userId,
+                                username: currentHostInfo.hostName,
+                                virtualIp: currentHostInfo.virtualIp,
+                                inCall: false,
+                                ts: Date.now()
+                            });
+                            rememberMessage(bgPresence);
+                            publishToMesh(topic, bgPresence);
+                        }
+                    } catch (e) {}
+                }
             }
         });
+
+        mqttClients.push(client);
     });
+
+    setTimeout(() => { pendingOutboundQueue = []; }, 6000);
+    return cleanCode;
 }
 
 function scanOpenRooms(timeoutMs = 2200) {
     return new Promise((resolve) => {
-        const scannerClient = mqtt.connect('mqtt://broker.emqx.io:1883');
         const requesterId = Math.random().toString(36).substring(2, 10);
         const foundRooms = new Map();
+        const tempScanners = [];
+        let finished = false;
 
         const finish = () => {
-            try { scannerClient.end(true); } catch (e) {}
+            if (finished) return;
+            finished = true;
+            tempScanners.forEach(s => { try { s.removeAllListeners(); s.end(true); } catch (e) {} });
             resolve(Array.from(foundRooms.values()));
         };
 
-        const timer = setTimeout(finish, timeoutMs);
+        setTimeout(finish, timeoutMs);
 
-        scannerClient.on('connect', () => {
-            scannerClient.subscribe(RADAR_RESPONSE_TOPIC, () => {
-                scannerClient.publish(RADAR_QUERY_TOPIC, JSON.stringify({
-                    action: 'discover',
-                    requesterId: requesterId
-                }));
-            });
-        });
+        MESH_BROKERS.forEach((brokerUrl) => {
+            try {
+                const scanner = mqtt.connect(brokerUrl, { protocolVersion: 4, connectTimeout: 2000, reconnectPeriod: 0 });
+                scanner.on('error', () => {});
+                tempScanners.push(scanner);
 
-        scannerClient.on('message', (topic, message) => {
-            if (topic === RADAR_RESPONSE_TOPIC) {
-                try {
-                    const data = JSON.parse(message.toString());
-                    if (data.requesterId === requesterId && data.roomCode) {
-                        foundRooms.set(data.roomCode, {
-                            roomCode: data.roomCode,
-                            hostName: data.hostName || 'Amigo',
-                            roomName: data.roomName || `Sala #${data.roomCode}`,
-                            avatar: data.avatar || './Banaya.png'
-                        });
+                scanner.on('connect', () => {
+                    scanner.subscribe(RADAR_RESPONSE_TOPIC, () => {
+                        scanner.publish(RADAR_QUERY_TOPIC, JSON.stringify({
+                            action: 'discover',
+                            requesterId: requesterId
+                        }));
+                    });
+                });
+
+                scanner.on('message', (topic, message) => {
+                    if (topic === RADAR_RESPONSE_TOPIC) {
+                        try {
+                            const data = JSON.parse(message.toString());
+                            if (data.requesterId === requesterId && data.roomCode) {
+                                foundRooms.set(data.roomCode, {
+                                    roomCode: data.roomCode,
+                                    hostName: data.hostName || 'Friend',
+                                    roomName: data.roomName || `Network #${data.roomCode}`,
+                                    avatar: data.avatar || './Banaya.png'
+                                });
+                            }
+                        } catch (e) {}
                     }
-                } catch (e) {}
-            }
-        });
-
-        scannerClient.on('error', () => {
-            clearTimeout(timer);
-            finish();
+                });
+            } catch (e) {}
         });
     });
 }
 
 function stopServer() {
     if (server) server.close();
-    if (mqttClient) mqttClient.end(true);
+    clearMeshClients();
 }
 
-module.exports = { startLocalServer, stopServer, joinSwarmRoom, scanOpenRooms };
+module.exports = { startLocalServer, stopServer, joinSwarmRoom, leaveSwarmRoom, scanOpenRooms, getActiveRoomCode };

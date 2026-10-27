@@ -1,28 +1,82 @@
-const { app, BrowserWindow, ipcMain, desktopCapturer, session, dialog, shell } = require('electron');
+const { app, BrowserWindow, ipcMain, desktopCapturer, session, shell, Tray, Menu } = require('electron');
 const { autoUpdater } = require('electron-updater');
-const { spawn, execSync } = require('child_process');
+const { spawn, exec } = require('child_process');
 const path = require('path');
 const https = require('https');
 const fs = require('fs');
 const os = require('os');
-const { startLocalServer, stopServer, joinSwarmRoom, scanOpenRooms } = require('./server');
+const { startLocalServer, stopServer, joinSwarmRoom, leaveSwarmRoom, scanOpenRooms, getActiveRoomCode } = require('./server');
+
+process.on('uncaughtException', (err) => {
+    console.warn('[Background Warning]:', err?.message || err);
+});
+process.on('unhandledRejection', (reason) => {
+    console.warn('[Background Rejection]:', reason);
+});
 
 app.commandLine.appendSwitch('disable-features', 'WebRtcHideLocalIpsWithMdns');
 app.commandLine.appendSwitch('enforce-webrtc-ip-permission-check', 'false');
 app.commandLine.appendSwitch('force-webrtc-ip-handling-policy', 'default');
 app.commandLine.appendSwitch('autoplay-policy', 'no-user-gesture-required'); 
 
-let mainWindow;
+let mainWindow = null;
+let tray = null;
 let edgeProcess = null;
+let currentEdgeRoom = null;
 let myVirtualIp = null;
 let lanCheckInterval = null;
+let tapCheckedOnce = false;
+let firewallCheckedOnce = false;
 
 const SUPERNODE_ADDR = 'n2n.lucktu.com:10090';
 const isWin = process.platform === 'win32';
 const isLinux = process.platform === 'linux';
 
-autoUpdater.setFeedURL({ provider: 'github', owner: 'Aeryn-Mintz', repo: 'conflict' });
-autoUpdater.autoDownload = false; 
+function buildNetworkKey(roomName, roomCode) {
+    const cleanCode = String(roomCode || 'DEFAULT').trim().toUpperCase();
+    const slug = String(roomName || '').trim().toLowerCase().replace(/[^a-z0-9]/g, '').slice(0, 12);
+    return slug ? `${slug}_${cleanCode}` : cleanCode;
+}
+
+autoUpdater.setFeedURL({
+    provider: 'github',
+    owner: 'Aeryn-Mintz',
+    repo: 'conflict'
+});
+autoUpdater.autoDownload = true;
+autoUpdater.autoInstallOnAppQuit = true;
+
+autoUpdater.on('update-available', (info) => {
+    if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.webContents.send('update_available', info.version);
+    }
+});
+
+autoUpdater.on('download-progress', (progressObj) => {
+    if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.webContents.send('download_progress', Math.round(progressObj.percent));
+    }
+});
+
+autoUpdater.on('update-downloaded', (info) => {
+    if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.webContents.send('update_downloaded', info.version);
+    }
+});
+
+autoUpdater.on('error', (err) => {
+    console.warn('[AutoUpdater]:', err.message);
+});
+
+ipcMain.on('restart_app', () => {
+    app.isQuiting = true;
+    stopN2NNetwork();
+    stopServer();
+    setImmediate(() => {
+        app.removeAllListeners('window-all-closed');
+        autoUpdater.quitAndInstall(true, true);
+    });
+});
 
 function resolveBinPath(...segments) {
     const candidates = [
@@ -38,37 +92,99 @@ function resolveBinPath(...segments) {
     return candidates[0];
 }
 
-function ensureTapDriverInstalled() {
-    if (!isWin) return true;
+function ensureTapDriverInstalledAsync() {
+    if (!isWin || tapCheckedOnce) return;
+    tapCheckedOnce = true;
 
-    try {
-        const output = execSync('ipconfig /all', { encoding: 'utf8' });
-        if (output.includes('TAP-Windows Adapter')) return true;
-    } catch (e) {}
+    exec('ipconfig /all', (err, stdout) => {
+        if (!err && stdout && stdout.includes('TAP-Windows Adapter')) return;
 
-    // Procura tap-windows.exe ou qualquer ficheiro tap-windows*.exe dentro de bin/win
-    const winBinDir = resolveBinPath('win');
-    let installerPath = path.join(winBinDir, 'tap-windows.exe');
+        const winBinDir = resolveBinPath('win');
+        let installerPath = path.join(winBinDir, 'tap-windows.exe');
 
-    if (!fs.existsSync(installerPath) && fs.existsSync(winBinDir)) {
-        const found = fs.readdirSync(winBinDir).find(f => f.toLowerCase().startsWith('tap-windows') && f.toLowerCase().endsWith('.exe'));
-        if (found) installerPath = path.join(winBinDir, found);
-    }
-
-    if (fs.existsSync(installerPath)) {
-        try {
-            execSync(`"${installerPath}" /S`);
-            return true;
-        } catch (err) {
-            console.error('Erro ao instalar driver TAP:', err);
+        if (!fs.existsSync(installerPath) && fs.existsSync(winBinDir)) {
+            const found = fs.readdirSync(winBinDir).find(f => f.toLowerCase().startsWith('tap-windows') && f.toLowerCase().endsWith('.exe'));
+            if (found) installerPath = path.join(winBinDir, found);
         }
-    }
-    return false;
+
+        if (fs.existsSync(installerPath)) {
+            exec(`"${installerPath}" /S`, () => {});
+        }
+    });
 }
 
-function startN2NNetwork(roomCode, isHost) {
+function getOrCreatePersistentLanIp() {
+    const ipFile = path.join(app.getPath('userData'), 'conflict-lan-ip.txt');
+    try {
+        if (fs.existsSync(ipFile)) {
+            const saved = fs.readFileSync(ipFile, 'utf8').trim();
+            if (/^10\.66\.0\.\d+$/.test(saved)) return saved;
+        }
+    } catch (e) {}
+
+    const oct4 = Math.floor(Math.random() * 240) + 10;
+    const generatedIp = `10.66.0.${oct4}`;
+    try { fs.writeFileSync(ipFile, generatedIp, 'utf8'); } catch (e) {}
+    return generatedIp;
+}
+
+function updateTrayMenu() {
+    if (!tray) return;
+    const activeCode = getActiveRoomCode();
+    const netLabel = activeCode
+        ? `🟢 Network: #${activeCode} (${myVirtualIp || '10.66.0.x'})`
+        : `⚪ Network: Disconnected`;
+
+    const contextMenu = Menu.buildFromTemplate([
+        { label: 'Conflict P2P & Virtual LAN', enabled: false },
+        { label: netLabel, enabled: false },
+        { type: 'separator' },
+        {
+            label: '🖥️ Open Conflict',
+            click: () => {
+                if (mainWindow) {
+                    mainWindow.show();
+                    mainWindow.focus();
+                }
+            }
+        },
+        {
+            label: '🔌 Disconnect Virtual LAN',
+            enabled: !!activeCode,
+            click: () => {
+                stopN2NNetwork();
+                leaveSwarmRoom();
+                updateTrayMenu();
+                if (mainWindow && !mainWindow.isDestroyed()) {
+                    mainWindow.webContents.send('network-disconnected');
+                }
+            }
+        },
+        { type: 'separator' },
+        {
+            label: '❌ Quit Conflict',
+            click: () => {
+                app.isQuiting = true;
+                stopN2NNetwork();
+                stopServer();
+                app.quit();
+            }
+        }
+    ]);
+    tray.setContextMenu(contextMenu);
+}
+
+function startN2NNetwork(netKey) {
+    const cleanKey = String(netKey || 'DEFAULT').trim();
+    myVirtualIp = getOrCreatePersistentLanIp();
+
+    if (edgeProcess && currentEdgeRoom === cleanKey) {
+        updateTrayMenu();
+        return myVirtualIp;
+    }
+
     stopN2NNetwork();
-    ensureTapDriverInstalled();
+    ensureTapDriverInstalledAsync();
 
     const edgePath = isWin 
         ? resolveBinPath('win', 'edge.exe')
@@ -76,30 +192,20 @@ function startN2NNetwork(roomCode, isHost) {
 
     if (!fs.existsSync(edgePath)) {
         console.warn(`Binário do n2n não encontrado em: ${edgePath}`);
-        return null;
+        return myVirtualIp;
     }
 
     if (isLinux) {
         try { fs.chmodSync(edgePath, '755'); } catch (e) {}
     }
 
-    if (isWin) {
-        try {
-            execSync(`netsh advfirewall firewall delete rule name="Conflict Virtual LAN"`, { stdio: 'ignore' });
-            execSync(`netsh advfirewall firewall add rule name="Conflict Virtual LAN" dir=in action=allow program="${edgePath}" enable=yes`, { stdio: 'ignore' });
-            execSync(`netsh advfirewall firewall add rule name="Conflict Virtual LAN Out" dir=out action=allow program="${edgePath}" enable=yes`, { stdio: 'ignore' });
-        } catch (e) {}
+    if (isWin && !firewallCheckedOnce) {
+        firewallCheckedOnce = true;
+        exec(`netsh advfirewall firewall delete rule name="Conflict Virtual LAN" & netsh advfirewall firewall add rule name="Conflict Virtual LAN" dir=in action=allow program="${edgePath}" enable=yes & netsh advfirewall firewall add rule name="Conflict Virtual LAN Out" dir=out action=allow program="${edgePath}" enable=yes`, () => {});
     }
 
-    if (isHost) {
-        myVirtualIp = '10.66.0.1';
-    } else {
-        const oct4 = Math.floor(Math.random() * 250) + 2;
-        myVirtualIp = `10.66.0.${oct4}`;
-    }
-
-    const communityName = `cfl_${roomCode.toUpperCase()}`;
-    const secretKey = `key_${roomCode.toUpperCase()}_conflict`;
+    const communityName = `cfl_${cleanKey}`;
+    const secretKey = `key_${cleanKey}_conflict`;
 
     const args = [
         '-c', communityName,
@@ -111,9 +217,18 @@ function startN2NNetwork(roomCode, isHost) {
     ];
     if (isLinux) args.push('-f');
 
-    edgeProcess = spawn(edgePath, args, { windowsHide: true });
+    try {
+        edgeProcess = spawn(edgePath, args, { windowsHide: true });
+        currentEdgeRoom = cleanKey;
 
-    // Verifica nas interfaces de rede do sistema quando o IP 10.66.0.x sobe
+        edgeProcess.on('exit', () => {
+            if (currentEdgeRoom === cleanKey) {
+                edgeProcess = null;
+                currentEdgeRoom = null;
+            }
+        });
+    } catch (e) {}
+
     let checks = 0;
     lanCheckInterval = setInterval(() => {
         checks++;
@@ -129,6 +244,7 @@ function startN2NNetwork(roomCode, isHost) {
         }
     }, 1000);
 
+    updateTrayMenu();
     return myVirtualIp;
 }
 
@@ -137,17 +253,17 @@ function stopN2NNetwork() {
         clearInterval(lanCheckInterval);
         lanCheckInterval = null;
     }
+    currentEdgeRoom = null;
     if (edgeProcess) {
-        try { edgeProcess.kill('SIGTERM'); } catch (e) {}
+        try { edgeProcess.kill(); } catch (e) {}
         edgeProcess = null;
     }
-    try {
-        if (isWin) {
-            execSync('taskkill /F /IM edge.exe /T', { stdio: 'ignore' });
-        } else if (isLinux) {
-            execSync('pkill -f "edge -c cfl_"', { stdio: 'ignore' });
-        }
-    } catch (e) {}
+    if (isWin) {
+        exec('taskkill /F /IM edge.exe /T', () => {});
+    } else if (isLinux) {
+        exec('pkill -f "edge -c cfl_"', () => {});
+    }
+    updateTrayMenu();
 }
 
 ipcMain.on('download-radmin', () => {
@@ -166,13 +282,46 @@ app.whenReady().then(() => {
     const rootDir = fs.existsSync(path.join(__dirname, 'index.html')) ? __dirname : path.join(__dirname, '..');
     startLocalServer(rootDir);
 
+    const iconPath = path.join(rootDir, 'conflict-logo.png');
+
     mainWindow = new BrowserWindow({
         width: 1200, height: 800, minWidth: 900, minHeight: 600,
-        backgroundColor: '#050a06', title: "Conflict", autoHideMenuBar: true, 
+        backgroundColor: '#050a06', title: "Conflict", autoHideMenuBar: true,
+        icon: fs.existsSync(iconPath) ? iconPath : undefined,
         webPreferences: { nodeIntegration: true, contextIsolation: false, webSecurity: false }
     });
 
+    if (fs.existsSync(iconPath)) {
+        try {
+            tray = new Tray(iconPath);
+            tray.setToolTip('Conflict — Virtual LAN & Studio Voice');
+            tray.on('click', () => {
+                if (mainWindow) {
+                    if (mainWindow.isVisible()) mainWindow.focus();
+                    else mainWindow.show();
+                }
+            });
+            updateTrayMenu();
+        } catch (e) {
+            console.warn('Tray init error:', e);
+        }
+    }
+
+    mainWindow.on('close', (event) => {
+        if (!app.isQuiting) {
+            event.preventDefault();
+            mainWindow.hide();
+            return false;
+        }
+    });
+
     mainWindow.loadURL('http://localhost:8080/index.html');
+
+    mainWindow.webContents.on('did-finish-load', () => {
+        if (app.isPackaged) {
+            autoUpdater.checkForUpdates().catch(() => {});
+        }
+    });
 
     ipcMain.on('toggle-startup', (event, enable) => {
         app.setLoginItemSettings({ openAtLogin: enable, path: app.getPath('exe') });
@@ -187,17 +336,29 @@ app.whenReady().then(() => {
         }).catch(() => callback(null));
     });
 
-    ipcMain.on('start-host', async (event, hostMeta = {}) => {
-        const roomCode = Math.random().toString(36).substring(2, 8).toUpperCase();
-        const virtualIp = startN2NNetwork(roomCode, true);
-        await joinSwarmRoom(roomCode, true, hostMeta);
-        event.reply('host-started', { roomCode, virtualIp });
+    ipcMain.on('connect-network', async (event, netMeta = {}) => {
+        const roomCode = (netMeta.roomCode || 'DEFAULT').trim().toUpperCase();
+        const netKey = buildNetworkKey(netMeta.roomName, roomCode);
+        const virtualIp = startN2NNetwork(netKey);
+        await joinSwarmRoom(roomCode, true, { ...netMeta, netKey, virtualIp });
+        updateTrayMenu();
+        event.reply('room-joined', { roomCode, virtualIp });
     });
 
-    ipcMain.on('join-room', async (event, roomCode) => {
-        const virtualIp = startN2NNetwork(roomCode, false);
-        await joinSwarmRoom(roomCode, false);
-        event.reply('room-joined', { roomCode, virtualIp });
+    ipcMain.handle('ensure-network', async (event, netMeta = {}) => {
+        const roomCode = (netMeta.roomCode || 'DEFAULT').trim().toUpperCase();
+        const netKey = buildNetworkKey(netMeta.roomName, roomCode);
+        const virtualIp = startN2NNetwork(netKey);
+        await joinSwarmRoom(roomCode, true, { ...netMeta, netKey, virtualIp });
+        updateTrayMenu();
+        return { roomCode, virtualIp };
+    });
+
+    ipcMain.handle('get-network-status', () => {
+        return {
+            activeRoomCode: getActiveRoomCode(),
+            virtualIp: myVirtualIp || getOrCreatePersistentLanIp()
+        };
     });
 
     ipcMain.on('scan-rooms', async (event) => {
@@ -205,35 +366,23 @@ app.whenReady().then(() => {
         event.reply('scan-rooms-result', rooms);
     });
 
-    ipcMain.handle('get-virtual-ip', () => myVirtualIp);
+    ipcMain.handle('get-virtual-ip', () => myVirtualIp || getOrCreatePersistentLanIp());
 
     ipcMain.on('leave-virtual-lan', () => {
         stopN2NNetwork();
+        leaveSwarmRoom();
+        updateTrayMenu();
     });
 });
 
-ipcMain.handle('manual-update-check', async () => {
-    return new Promise((resolve) => {
-        autoUpdater.once('update-available', (info) => {
-            dialog.showMessageBox(mainWindow, {
-                type: 'info', 
-                title: 'Atualização Disponível',
-                message: `A versão ${info.version} do Conflict está disponível!\n\nDeseja abrir o GitHub para baixar a nova versão?`,
-                buttons: ['Sim, abrir o GitHub', 'Não, jogar agora']
-            }).then((result) => {
-                if (result.response === 0) shell.openExternal('https://github.com/Aeryn-Mintz/Conflict/releases');
-                resolve('skipped');
-            });
-        });
-        
-        autoUpdater.once('update-not-available', () => resolve('none'));
-        autoUpdater.once('error', () => resolve('error'));
-        autoUpdater.checkForUpdates().catch(() => resolve('error'));
-    });
+app.on('before-quit', () => {
+    app.isQuiting = true;
 });
 
 app.on('window-all-closed', () => { 
-    stopN2NNetwork();
-    stopServer(); 
-    if (process.platform !== 'darwin') app.quit(); 
+    if (app.isQuiting) {
+        stopN2NNetwork();
+        stopServer(); 
+        if (process.platform !== 'darwin') app.quit(); 
+    }
 });
