@@ -10,117 +10,159 @@
             display: flex;
             align-items: center;
             justify-content: center;
-            background-image: radial-gradient(circle at 50% 50%, rgba(16, 185, 129, 0.1), transparent 70%);
-            background-color: var(--bg-base, #050a06);
+            background-color: var(--bg-base, #040806);
+            background-image:
+                radial-gradient(circle at 50% 18%, rgba(16, 185, 129, 0.18), transparent 55%),
+                radial-gradient(circle at 15% 85%, rgba(251, 191, 36, 0.06), transparent 45%),
+                radial-gradient(rgba(16, 185, 129, 0.08) 1px, transparent 1px);
+            background-size: 100% 100%, 100% 100%, 28px 28px;
             color: var(--text-main, #ecfdf5);
             margin: 0;
             height: 100vh;
-            font-family: sans-serif;
             user-select: none;
         }
         .launcher-box {
             width: 100%;
             max-width: 480px;
             text-align: center;
-            padding: 32px;
-            background: var(--panel-bg, rgba(13, 26, 16, 0.75));
-            border: 1px solid rgba(16, 185, 129, 0.2);
-            border-radius: 12px;
+            padding: 34px 32px;
+            background: linear-gradient(160deg, rgba(12, 24, 16, 0.88), rgba(5, 10, 7, 0.94));
+            border: 1px solid rgba(16, 185, 129, 0.28);
+            border-radius: 18px;
             max-height: 88vh;
             overflow-y: auto;
-            box-shadow: 0 12px 40px rgba(0, 0, 0, 0.6);
+            box-shadow: 0 24px 60px rgba(0, 0, 0, 0.8), 0 0 40px rgba(16, 185, 129, 0.08), inset 0 1px 0 rgba(255, 255, 255, 0.08);
+            position: relative;
+        }
+        .launcher-box::before {
+            content: "";
+            position: absolute;
+            top: 0; left: 20%; right: 20%;
+            height: 2px;
+            background: linear-gradient(90deg, transparent, var(--accent-main, #10b981), #fbbf24, var(--accent-main, #10b981), transparent);
+            opacity: 0.75;
         }
         .brand-huge {
-            font-size: 34px;
+            font-family: 'Cinzel', 'Nunito', serif;
+            font-size: 36px;
             font-weight: 900;
-            margin-bottom: 24px;
+            margin-bottom: 26px;
             display: flex;
             align-items: center;
             justify-content: center;
             gap: 14px;
             text-transform: uppercase;
-            letter-spacing: 1px;
+            letter-spacing: 2.5px;
+            color: #fff;
+            text-shadow: 0 4px 20px rgba(16, 185, 129, 0.45);
         }
         .brand-icon-img {
-            width: 44px;
-            height: 44px;
-            filter: drop-shadow(0 0 15px rgba(16, 185, 129, 0.8));
+            width: 48px;
+            height: 48px;
+            filter: drop-shadow(0 0 16px rgba(16, 185, 129, 0.85));
+            animation: floatCrest 4s ease-in-out infinite;
+        }
+        @keyframes floatCrest {
+            0%, 100% { transform: translateY(0px) rotate(0deg); }
+            50% { transform: translateY(-4px) rotate(2deg); }
         }
         .choice-btn {
             width: 100%;
-            padding: 12px;
+            padding: 12px 14px;
             font-size: 14px;
             margin-bottom: 10px;
-            border-radius: 8px;
+            border-radius: 10px;
             cursor: pointer;
             border: none;
-            font-weight: bold;
-            transition: 0.2s;
+            font-weight: 800;
+            letter-spacing: 0.3px;
+            transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
         }
         .primary-btn {
-            background: #10b981;
-            color: #000;
-            box-shadow: 0 0 10px rgba(16, 185, 129, 0.4);
+            background: linear-gradient(135deg, #10b981, #059669);
+            color: #031109;
+            box-shadow: 0 4px 18px rgba(16, 185, 129, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.35);
         }
         .primary-btn:hover {
             filter: brightness(1.1);
+            transform: translateY(-2px);
+            box-shadow: 0 8px 24px rgba(16, 185, 129, 0.5);
         }
         .secondary-btn {
-            background: rgba(255, 255, 255, 0.1);
+            background: rgba(255, 255, 255, 0.07);
             color: #fff;
-            border: 1px solid rgba(255, 255, 255, 0.2);
+            border: 1px solid rgba(255, 255, 255, 0.16);
         }
         .secondary-btn:hover {
-            background: rgba(255, 255, 255, 0.16);
+            background: rgba(16, 185, 129, 0.14);
+            border-color: rgba(16, 185, 129, 0.45);
+            transform: translateY(-2px);
         }
         .outline-btn {
             background: transparent;
+            color: rgba(255, 255, 255, 0.8);
+            border: 1px dashed rgba(255, 255, 255, 0.22);
+        }
+        .outline-btn:hover {
+            border-style: solid;
+            border-color: #fff;
             color: #fff;
-            border: 1px solid rgba(255, 255, 255, 0.2);
         }
         .hidden-panel {
             display: none;
             margin-top: 18px;
             padding-top: 18px;
             border-top: 1px solid rgba(255, 255, 255, 0.1);
-            animation: fadeIn 0.2s ease;
+            animation: fadeIn 0.22s ease;
         }
         @keyframes fadeIn {
-            from { opacity: 0; transform: translateY(-6px); }
+            from { opacity: 0; transform: translateY(-8px); }
             to { opacity: 1; transform: translateY(0); }
         }
         @keyframes spin {
             100% { transform: rotate(360deg); }
         }
         input {
-            padding: 10px 12px;
-            border-radius: 6px;
-            border: 1px solid rgba(255, 255, 255, 0.2);
-            background: rgba(0, 0, 0, 0.5);
+            padding: 11px 14px;
+            border-radius: 9px;
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            background: rgba(0, 0, 0, 0.55);
             color: #fff;
             outline: none;
+            font-family: inherit;
+            transition: all 0.2s ease;
         }
         input:focus {
             border-color: #10b981;
-            box-shadow: 0 0 8px rgba(16, 185, 129, 0.3);
+            box-shadow: 0 0 12px rgba(16, 185, 129, 0.3);
+            background: rgba(0, 0, 0, 0.75);
         }
         .room-radar-card {
             display: flex;
             justify-content: space-between;
             align-items: center;
-            padding: 10px 12px;
-            background: rgba(0, 0, 0, 0.5);
-            border: 1px solid rgba(16, 185, 129, 0.25);
-            border-radius: 8px;
+            padding: 11px 14px;
+            background: linear-gradient(135deg, rgba(16, 28, 20, 0.7), rgba(6, 12, 8, 0.85));
+            border: 1px solid rgba(16, 185, 129, 0.22);
+            border-left: 3px solid var(--accent-main, #10b981);
+            border-radius: 10px;
             text-align: left;
+            transition: all 0.2s ease;
+        }
+        .room-radar-card:hover {
+            transform: translateX(3px);
+            border-color: rgba(16, 185, 129, 0.5);
+            box-shadow: 0 6px 18px rgba(0, 0, 0, 0.5);
         }
         .net-badge {
-            font-family: monospace;
+            font-family: 'JetBrains Mono', monospace;
             background: rgba(16, 185, 129, 0.15);
+            border: 1px solid rgba(16, 185, 129, 0.3);
             color: #10b981;
-            padding: 2px 6px;
-            border-radius: 4px;
+            padding: 2px 7px;
+            border-radius: 5px;
             font-size: 11px;
+            font-weight: 700;
         }
     </style>
 </head>
@@ -142,23 +184,23 @@
         <div class="brand-huge"><img src="./conflict-logo.png" alt="Logo" class="brand-icon-img"> Conflict</div>
 
         <!-- BACKGROUND LAN STATUS BAR -->
-        <div id="bg-lan-status-bar" style="display:none; background: rgba(16, 185, 129, 0.12); border: 1px solid #10b981; border-radius: 8px; padding: 8px 12px; margin-bottom: 16px; justify-content: space-between; align-items: center; font-size: 12px;">
+        <div id="bg-lan-status-bar" style="display:none; background: rgba(16, 185, 129, 0.12); border: 1px solid #10b981; border-radius: 10px; padding: 9px 12px; margin-bottom: 16px; justify-content: space-between; align-items: center; font-size: 12px;">
             <div id="bg-lan-status-text" style="text-align: left; color: #ecfdf5;"></div>
             <div style="display: flex; gap: 6px;">
-                <button id="btn-open-active-room" class="primary-btn" style="padding: 5px 10px; font-size: 11px; border-radius: 5px; border: none; cursor: pointer; font-weight: bold;">Open Room</button>
-                <button id="btn-disconnect-bg-lan" class="outline-btn" style="padding: 5px 8px; font-size: 11px; border-radius: 5px; cursor: pointer; color: #ef4444; border-color: rgba(239,68,68,0.5);">Disconnect</button>
+                <button id="btn-open-active-room" class="primary-btn" style="padding: 5px 10px; font-size: 11px; border-radius: 6px; border: none; cursor: pointer; font-weight: bold;">Open Room</button>
+                <button id="btn-disconnect-bg-lan" class="outline-btn" style="padding: 5px 8px; font-size: 11px; border-radius: 6px; cursor: pointer; color: #ef4444; border-color: rgba(239,68,68,0.5);">Disconnect</button>
             </div>
         </div>
 
         <div id="main-choices">
             <div style="text-align: left; margin-bottom: 16px;">
-                <div style="font-size: 11px; font-weight: bold; color: rgba(255,255,255,0.55); text-transform: uppercase; margin-bottom: 8px; display: flex; justify-content: space-between;">
+                <div style="font-size: 11px; font-weight: 800; color: rgba(255,255,255,0.6); text-transform: uppercase; letter-spacing: 0.8px; margin-bottom: 8px; display: flex; justify-content: space-between;">
                     <span id="saved-networks-title">🌐 My Saved Networks</span>
                 </div>
-                <div id="saved-networks-list" style="display: flex; flex-direction: column; gap: 8px; max-height: 185px; overflow-y: auto;"></div>
+                <div id="saved-networks-list" class="kokonut-scroll" style="display: flex; flex-direction: column; gap: 8px; max-height: 185px; overflow-y: auto; padding-right: 2px;"></div>
             </div>
 
-            <div style="background: rgba(0,0,0,0.35); padding: 14px; border-radius: 10px; border: 1px solid rgba(16, 185, 129, 0.2);">
+            <div style="background: rgba(0,0,0,0.4); padding: 15px; border-radius: 12px; border: 1px solid rgba(16, 185, 129, 0.22);">
                 <input type="text" id="new-net-name-input" placeholder="Network Name (e.g. Squad 1-2-3, RPG Table)..." style="width: 100%; box-sizing: border-box; margin-bottom: 10px; font-size: 13px;">
                 <div style="display: flex; gap: 10px;">
                     <button id="host-game-btn" class="primary-btn choice-btn" style="margin-bottom: 0; flex: 1;">➕ Create Network</button>
@@ -171,7 +213,7 @@
         <div id="join-panel" class="hidden-panel">
             <h3 id="join-net-heading" style="margin-top: 0; margin-bottom: 14px;">Join a Network</h3>
             
-            <div style="background: rgba(0,0,0,0.3); padding: 14px; border-radius: 8px; margin-bottom: 14px; border: 1px solid rgba(255,255,255,0.05); text-align: left;">
+            <div style="background: rgba(0,0,0,0.35); padding: 14px; border-radius: 10px; margin-bottom: 14px; border: 1px solid rgba(255,255,255,0.06); text-align: left;">
                 <p id="opt1-code-label" style="color: rgba(255,255,255,0.6); font-size: 12px; margin-top: 0; margin-bottom: 8px;">Option 1: Enter Network Name & Code</p>
                 <input type="text" id="join-net-name-input" placeholder="Exact Network Name (or paste Invite)..." style="width: 100%; box-sizing: border-box; margin-bottom: 8px; font-size: 12px;">
                 <div style="display: flex; gap: 8px;">
@@ -180,12 +222,12 @@
                 </div>
             </div>
 
-            <div id="radar-container" style="background: rgba(0,0,0,0.3); padding: 14px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.05);">
+            <div id="radar-container" style="background: rgba(0,0,0,0.35); padding: 14px; border-radius: 10px; border: 1px solid rgba(255,255,255,0.06);">
                 <p style="color: rgba(255,255,255,0.6); font-size: 12px; margin-top: 0; margin-bottom: 10px; display: flex; justify-content: space-between;">
                     <span id="opt2-radar-label">Option 2: Active Networks on Radar</span>
                     <span id="radar-spinner" style="display:none; color: #10b981;">Scanning...</span>
                 </p>
-                <div id="radar-results" style="display: flex; flex-direction: column; gap: 8px; max-height: 150px; overflow-y: auto;"></div>
+                <div id="radar-results" class="kokonut-scroll" style="display: flex; flex-direction: column; gap: 8px; max-height: 150px; overflow-y: auto;"></div>
                 <button id="scan-rooms-btn" class="secondary-btn choice-btn" style="margin-bottom: 0; margin-top: 10px; font-size: 13px; padding: 9px;">📡 Scan for Networks</button>
             </div>
 
@@ -194,7 +236,8 @@
     </div>
 
     <script src="js/lang.js"></script>
-    <script src="js/updater.js"></script>
+    <script src="js/no_changes/updater.js"></script>
+    <script src="js/no_changes/sfx.js"></script>
     <script>
         const savedBg = localStorage.getItem('themeBg');
         const savedPanel = localStorage.getItem('themePanel');
@@ -306,7 +349,7 @@
             }
 
             if (list.length === 0) {
-                cont.innerHTML = `<div style="padding: 14px; background: rgba(0,0,0,0.3); border-radius: 8px; border: 1px dashed rgba(255,255,255,0.15); color: rgba(255,255,255,0.45); font-size: 12px; text-align: center;">${t.noSavedNetworks || 'No saved networks yet. Create or join one below!'}</div>`;
+                cont.innerHTML = `<div style="padding: 16px; background: rgba(0,0,0,0.3); border-radius: 10px; border: 1px dashed rgba(255,255,255,0.15); color: rgba(255,255,255,0.45); font-size: 12px; text-align: center;">🎲 ${t.noSavedNetworks || 'No saved networks yet. Create or join a party network below!'}</div>`;
                 return;
             }
 
@@ -318,18 +361,18 @@
 
                 card.innerHTML = `
                     <div class="net-info-area" style="overflow:hidden; flex-grow:1; margin-right:8px;">
-                        <div class="net-title-text" style="font-weight:bold; font-size:14px; color:#fff; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">
-                            ${isConnected ? '🟢' : '🌐'} ${net.name}
+                        <div class="net-title-text" style="font-weight:800; font-size:14px; color:#fff; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">
+                            ${isConnected ? '🟢' : '🛡️'} ${net.name}
                         </div>
-                        <div style="font-size:11px; color:rgba(255,255,255,0.5); margin-top:2px;">
+                        <div style="font-size:11px; color:rgba(255,255,255,0.5); margin-top:3px;">
                             Code: <span class="net-badge">${net.code}</span>
                             ${isConnected ? `<span style="color:#10b981; margin-left:6px; font-weight:bold;">• LAN Active</span>` : ''}
                         </div>
                     </div>
                     <div style="display:flex; gap:6px; align-items:center; flex-shrink:0;">
-                        ${!isConnected ? `<button class="secondary-btn btn-lan-only" title="Activate LAN in background without opening room" style="padding:6px 8px; font-size:11px; border-radius:6px; cursor:pointer;">🎮 LAN</button>` : ''}
-                        <button class="primary-btn btn-conn" style="padding:6px 12px; font-size:12px; border-radius:6px; border:none; cursor:pointer; font-weight:bold;">${isConnected ? 'Open Room' : (t.connectBtn || 'Connect')}</button>
-                        <button class="outline-btn btn-del" title="Remove" style="padding:5px 8px; font-size:11px; border-radius:6px; cursor:pointer; color:#ef4444; border-color:rgba(239,68,68,0.4);">✕</button>
+                        ${!isConnected ? `<button class="secondary-btn btn-lan-only" title="Activate LAN in background without opening room" style="padding:6px 9px; font-size:11px; border-radius:7px; cursor:pointer;">🎮 LAN</button>` : ''}
+                        <button class="primary-btn btn-conn" style="padding:6px 13px; font-size:12px; border-radius:7px; border:none; cursor:pointer; font-weight:800;">${isConnected ? 'Open Room' : (t.connectBtn || 'Connect')}</button>
+                        <button class="outline-btn btn-del" title="Remove" style="padding:5px 8px; font-size:11px; border-radius:7px; cursor:pointer; color:#ef4444; border-color:rgba(239,68,68,0.4);">✕</button>
                     </div>
                 `;
                 card.querySelector('.btn-conn').onclick = () => connectToNetwork(net.code, net.name, true);
