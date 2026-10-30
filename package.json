@@ -1,6 +1,6 @@
 {
   "name": "conflict",
-  "version": "1.18.8",
+  "version": "1.18.14",
   "description": "Secure P2P Comms, VTT & Virtual LAN",
   "author": "Aeryn-Mintz",
   "main": "js/main.js",

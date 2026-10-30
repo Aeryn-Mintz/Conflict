@@ -212,7 +212,7 @@ body {
 .glass-panel {
     background: var(--panel-bg);
     border: 1px solid var(--border-color);
-    backdrop-filter: blur(16px);
+    
     border-radius: 12px;
     padding: 24px;
     box-shadow: 0 8px 32px -4px rgba(0, 0, 0, 0.3);
@@ -305,8 +305,8 @@ body { background-image: radial-gradient(circle at top right, rgba(16, 185, 129,
 .glass-panel {
     background: var(--panel-bg);
     border: 1px solid var(--border-color);
-    backdrop-filter: blur(24px);
-    -webkit-backdrop-filter: blur(24px);
+    
+    
     border-radius: 16px;
     box-shadow: 0 4px 30px rgba(0, 0, 0, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.05);
     padding: 20px;
@@ -442,7 +442,7 @@ body { background-image: radial-gradient(circle at top right, rgba(16, 185, 129,
     background: rgba(0,0,0,0.8);
     border: 1px solid var(--border-color);
     border-radius: 12px;
-    backdrop-filter: blur(8px);
+    
 }
 
 .tool-btn {
@@ -567,7 +567,7 @@ body { background-image: radial-gradient(circle at top right, rgba(16, 185, 129,
     left: 15px;
     z-index: 10;
     background: rgba(0, 0, 0, 0.7);
-    backdrop-filter: blur(8px);
+    
     padding: 6px 12px;
     border-radius: 20px;
     font-size: 11px;
@@ -887,7 +887,7 @@ body { background-image: radial-gradient(circle at top right, rgba(16, 185, 129,
 .scene-manager-modal {
     position: absolute; top: 60px; right: 20px; width: 320px;
     background: var(--panel-bg); border: 1px solid var(--accent-main);
-    border-radius: 12px; padding: 15px; z-index: 200; backdrop-filter: blur(16px);
+    border-radius: 12px; padding: 15px; z-index: 200; 
     box-shadow: 0 10px 30px rgba(0,0,0,0.8); display: none; flex-direction: column; gap: 10px;
 }
 .scene-item {
@@ -974,8 +974,8 @@ body { background-image: radial-gradient(circle at top right, rgba(16, 185, 129,
    ========================================================= */
 .panel.glass-panel {
     background: linear-gradient(145deg, rgba(12, 24, 15, 0.78), rgba(6, 12, 8, 0.88)) !important;
-    backdrop-filter: blur(16px) saturate(160%) !important;
-    -webkit-backdrop-filter: blur(16px) saturate(160%) !important;
+    
+    
     border: 1px solid rgba(16, 185, 129, 0.18) !important;
     box-shadow: 0 12px 36px rgba(0, 0, 0, 0.65), inset 0 1px 0 rgba(255, 255, 255, 0.06) !important;
     border-radius: 12px !important;
@@ -1208,19 +1208,4 @@ body {
 #soundboard-buttons button:active {
     transform: translateY(1px);
     border-bottom-width: 1px;
-}
-/* =========================================================
-   HIGH-PERFORMANCE GPU MODE (ZERO LAG ENQUANTO JOGA)
-   ========================================================= */
-.panel.glass-panel,
-.floating-panel,
-.canvas-tools,
-.sidebar {
-    backdrop-filter: none !important;
-    -webkit-backdrop-filter: none !important;
-    background: linear-gradient(145deg, rgba(11, 22, 14, 0.95), rgba(5, 10, 7, 0.98)) !important;
-}
-
-.brand-icon-img {
-    animation: none !important;
 }
