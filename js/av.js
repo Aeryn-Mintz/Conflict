@@ -1,12 +1,14 @@
 // ==========================================
 // CENTRAL AUDIO & VIDEO ENGINE (js/av.js)
-// Otimizado para Baixo Uso de CPU e Compatibilidade Total com Discord/WhatsApp
+// Dual-Engine: WebRTC P2P + Instant Dedicated CGNAT Voice & Screen Relay
 // ==========================================
 window.peers = {};
 window.iceCandidateQueue = {};
 window.makingOffer = {};
 window.ignoreOffer = {};
+window.pendingRenegotiation = {};
 window.disconnectTimers = {};
+window.offerStuckTimers = {};
 window.localMicStream = null;
 window.localCamStream = null;
 window.localScreenStream = null;
@@ -16,11 +18,15 @@ window.soundboardDest = null;
 window.soundboardTrack = null;
 window.isMuted = false;
 window.remoteGainNodes = {};
+window.remoteAudioEls = {};
 window.bridgePlayTimes = {};
-window.bridgeAudioEls = {};
-window.voiceCancelRefNode = null;
-window.remoteVoiceMonitorAnalyser = null;
-window._gateInterval = null;
+window._activeBridgeSources = {};
+window._webrtcAudioActive = {};
+window._peerAckedAudio = {};
+window._peerAckedVideo = {};
+window._peerCreatedAt = {};
+window._callWatchdogInterval = null;
+window._screenBridgeInterval = null;
 
 window.rtcConfig = { 
     iceCandidatePoolSize: 2,
@@ -28,6 +34,7 @@ window.rtcConfig = {
     rtcpMuxPolicy: 'require',
     iceServers: [
         { urls: "stun:stun.l.google.com:19302" },
+        { urls: "stun:stun1.l.google.com:19302" },
         { urls: "stun:stun.cloudflare.com:3478" },
         {
             urls: [
@@ -38,6 +45,16 @@ window.rtcConfig = {
             ],
             username: "openrelayproject",
             credential: "openrelayproject"
+        },
+        {
+            urls: [
+                "turn:standard.relay.metered.ca:80",
+                "turn:standard.relay.metered.ca:80?transport=tcp",
+                "turn:standard.relay.metered.ca:443",
+                "turns:standard.relay.metered.ca:443?transport=tcp"
+            ],
+            username: "e8dd65b92aad9a3828ef62a4",
+            credential: "282/325+t32768="
         }
     ] 
 };
@@ -45,19 +62,21 @@ window.rtcConfig = {
 window.initAudioCtx = function() {
     if (!window.audioCtx) {
         const AudioContextClass = window.AudioContext || window.webkitAudioContext;
-        // Usa o sampleRate nativo do Windows (evita reamostragem forçada e crash no Discord/WhatsApp)
-        window.audioCtx = new AudioContextClass({
-            latencyHint: 'balanced'
-        });
+        try {
+            window.audioCtx = new AudioContextClass({
+                sampleRate: 48000,
+                latencyHint: 'interactive'
+            });
+        } catch (e) {
+            window.audioCtx = new AudioContextClass();
+        }
         window.soundboardDest = window.audioCtx.createMediaStreamDestination();
         window.soundboardTrack = window.soundboardDest.stream.getAudioTracks()[0];
 
-        window.voiceCancelRefNode = window.audioCtx.createGain();
-        window.voiceCancelRefNode.gain.value = 1.0;
-
-        window.remoteVoiceMonitorAnalyser = window.audioCtx.createAnalyser();
-        window.remoteVoiceMonitorAnalyser.fftSize = 256;
-        window.voiceCancelRefNode.connect(window.remoteVoiceMonitorAnalyser);
+        const outId = localStorage.getItem('appAudioOut');
+        if (outId && outId !== 'default' && typeof window.audioCtx.setSinkId === 'function') {
+            window.audioCtx.setSinkId(outId).catch(() => {});
+        }
     }
     if (window.audioCtx.state === 'suspended') {
         window.audioCtx.resume().catch(() => {});
@@ -70,86 +89,84 @@ window.isAnyFriendSpeaking = function() {
     for (const uid of Object.keys(window.bridgePlayTimes)) {
         if (window.bridgePlayTimes[uid] > now) return true;
     }
-    if (window.remoteVoiceMonitorAnalyser && Object.keys(window.remoteGainNodes).length > 0) {
-        if (!window._friendMonitorBuf) {
-            window._friendMonitorBuf = new Float32Array(window.remoteVoiceMonitorAnalyser.frequencyBinCount);
-        }
-        window.remoteVoiceMonitorAnalyser.getFloatTimeDomainData(window._friendMonitorBuf);
-        let sum = 0;
-        for (let i = 0; i < window._friendMonitorBuf.length; i += 2) {
-            sum += window._friendMonitorBuf[i] * window._friendMonitorBuf[i];
-        }
-        const rms = Math.sqrt(sum / (window._friendMonitorBuf.length / 2));
-        if (rms > 0.006) return true;
-    }
     return false;
 };
 
 window.getOrCreateRemoteGain = function(remoteUserId) {
     if (!window.audioCtx) window.initAudioCtx();
+    if (window.audioCtx.state === 'suspended') window.audioCtx.resume().catch(() => {});
     if (window.remoteGainNodes[remoteUserId]) return window.remoteGainNodes[remoteUserId];
-
-    let audioCont = document.getElementById('remote-audio-container');
-    if (!audioCont) {
-        audioCont = document.createElement('div');
-        audioCont.id = 'remote-audio-container';
-        audioCont.style.cssText = 'width:0; height:0; position:absolute; overflow:hidden; opacity:0; pointer-events:none;';
-        document.body.appendChild(audioCont);
-    }
 
     const remoteGain = window.audioCtx.createGain();
     const slider = document.getElementById(`vol-${remoteUserId}`);
     const savedVol = slider ? parseFloat(slider.value) : 1.0;
-    remoteGain.gain.value = window.inVoiceCall ? savedVol : 0.0;
+    remoteGain.gain.value = window.inVoiceCall ? Math.min(1.0, savedVol) : 0.0;
 
-    // Se o usuário não selecionou um dispositivo de saída customizado, conecta direto no destino padrão
-    // (Evita criar MediaStreamDestinations extras que sobrecarregam o audiodg.exe do Windows)
-    const outId = localStorage.getItem('appAudioOut');
-    if (outId && outId !== 'default') {
-        const outDest = window.audioCtx.createMediaStreamDestination();
-        remoteGain.connect(outDest);
-        const boostedAudio = document.createElement('audio');
-        boostedAudio.id = `audio-out-${remoteUserId}`;
-        boostedAudio.className = `stream-${remoteUserId}`;
-        boostedAudio.autoplay = true;
-        boostedAudio.srcObject = outDest.stream;
-        if (typeof boostedAudio.setSinkId === 'function') {
-            boostedAudio.setSinkId(outId).catch(() => {});
-        }
-        audioCont.appendChild(boostedAudio);
-        boostedAudio.play().catch(() => {});
-        window.bridgeAudioEls[remoteUserId] = boostedAudio;
-    } else {
-        remoteGain.connect(window.audioCtx.destination);
-    }
-
-    if (window.voiceCancelRefNode) {
-        remoteGain.connect(window.voiceCancelRefNode);
-    }
-
+    remoteGain.connect(window.audioCtx.destination);
     window.remoteGainNodes[remoteUserId] = remoteGain;
     return remoteGain;
 };
 
+window.stopBridgeSourcesForPeer = function(uid) {
+    if (window._activeBridgeSources && window._activeBridgeSources[uid]) {
+        window._activeBridgeSources[uid].forEach(s => {
+            try { s.stop(); s.disconnect(); } catch (e) {}
+        });
+        window._activeBridgeSources[uid] = [];
+    }
+    if (window.bridgePlayTimes) window.bridgePlayTimes[uid] = 0;
+};
+
+// Receptor de Voz Dedicado (Ativo imediatamente enquanto o WebRTC P2P estiver bloqueado por CGNAT!)
 window.handleVoiceFrame = function(data) {
     if (!window.inVoiceCall) return;
     if (!data || data.userId === window.myId || !data.d) return;
 
-    const pc = window.peers[data.userId];
-    if (pc && (pc.iceConnectionState === 'connected' || pc.iceConnectionState === 'completed')) return;
+    // Só desliga a ponte se o WebRTC P2P deste amigo já confirmou reprodução ativa de áudio
+    if (window._webrtcAudioActive[data.userId]) {
+        window.stopBridgeSourcesForPeer(data.userId);
+        return;
+    }
+
+    if (data.ts && Math.abs(Date.now() - data.ts) > 2500) return;
 
     if (!window.audioCtx) window.initAudioCtx();
+    if (window.audioCtx.state === 'suspended') window.audioCtx.resume().catch(() => {});
+
+    const statusEl = document.getElementById('voice-status');
+    if (statusEl && window.inVoiceCall && statusEl.innerText.includes('Connecting')) {
+        statusEl.style.color = '#10b981';
+        statusEl.innerText = 'Call: Studio Voice Active 🟢';
+    }
 
     try {
         const binaryStr = atob(data.d);
-        const len = binaryStr.length;
-        const bytes = new Uint8Array(len);
-        for (let i = 0; i < len; i++) bytes[i] = binaryStr.charCodeAt(i);
+        const byteLen = binaryStr.length;
+        let float32;
 
-        const int16 = new Int16Array(bytes.buffer);
-        const float32 = new Float32Array(int16.length);
-        for (let i = 0; i < int16.length; i++) {
-            float32[i] = int16[i] / 32768.0;
+        if (data.fmt === 'i16') {
+            const bytes = new Uint8Array(byteLen);
+            for (let i = 0; i < byteLen; i++) bytes[i] = binaryStr.charCodeAt(i);
+            const int16 = new Int16Array(bytes.buffer);
+            float32 = new Float32Array(int16.length);
+            for (let i = 0; i < int16.length; i++) {
+                float32[i] = int16[i] / 32768.0;
+            }
+        } else {
+            float32 = new Float32Array(byteLen);
+            for (let i = 0; i < byteLen; i++) {
+                let v = binaryStr.charCodeAt(i);
+                if (v >= 128) v -= 256;
+                float32[i] = v / 128.0;
+            }
+        }
+
+        // Suavização de 48 amostras nas bordas para eliminar cliques entre pacotes
+        const fadeLen = Math.min(48, Math.floor(float32.length / 8));
+        for (let i = 0; i < fadeLen; i++) {
+            const w = i / fadeLen;
+            float32[i] *= w;
+            float32[float32.length - 1 - i] *= w;
         }
 
         const sr = data.sr || 16000;
@@ -160,31 +177,150 @@ window.handleVoiceFrame = function(data) {
         source.buffer = audioBuffer;
 
         const gainNode = window.getOrCreateRemoteGain(data.userId);
+        const slider = document.getElementById(`vol-${data.userId}`);
+        const savedVol = slider ? parseFloat(slider.value) : 1.0;
+        gainNode.gain.value = window.inVoiceCall ? Math.min(1.0, savedVol) : 0.0;
+
         source.connect(gainNode);
 
         const now = window.audioCtx.currentTime;
         let startTime = window.bridgePlayTimes[data.userId] || 0;
-        if (startTime < now || startTime > now + 0.4) {
-            startTime = now + 0.04;
+
+        // Se a fila acumular mais de 280ms de atraso, limpa os buffers antigos para zero sobreposição/eco!
+        if (startTime > now + 0.28) {
+            window.stopBridgeSourcesForPeer(data.userId);
+            startTime = now + 0.03;
+        } else if (startTime < now) {
+            startTime = now + 0.03;
         }
+
+        if (!window._activeBridgeSources[data.userId]) window._activeBridgeSources[data.userId] = [];
+        window._activeBridgeSources[data.userId].push(source);
+        source.onended = () => {
+            if (window._activeBridgeSources[data.userId]) {
+                window._activeBridgeSources[data.userId] = window._activeBridgeSources[data.userId].filter(s => s !== source);
+            }
+        };
+
         source.start(startTime);
         window.bridgePlayTimes[data.userId] = startTime + audioBuffer.duration;
     } catch (e) {}
 };
 
+// Receptor de Compartilhamento de Tela (Ponte Dedicada + WebRTC)
+window.handleScreenFrame = function(data) {
+    if (!data || data.userId === window.myId) return;
+
+    const stageCont = document.getElementById('remote-audio-container') || document.querySelector('#video-grid .panel-content');
+    if (!stageCont) return;
+
+    if (data.action === 'screen_stop') {
+        const old = document.getElementById(`bridge-screen-container-${data.userId}`);
+        if (old) old.remove();
+        return;
+    }
+
+    if (!data.frame) return;
+
+    const hasNativeVideo = Array.from(document.querySelectorAll(`.stream-${data.userId} video`)).some(v => v.readyState >= 2 && !v.paused && v.videoWidth > 0);
+    if (hasNativeVideo) {
+        const old = document.getElementById(`bridge-screen-container-${data.userId}`);
+        if (old) old.remove();
+        return;
+    }
+
+    let container = document.getElementById(`bridge-screen-container-${data.userId}`);
+    let imgEl = document.getElementById(`bridge-screen-img-${data.userId}`);
+
+    if (!container) {
+        container = document.createElement('div');
+        container.id = `bridge-screen-container-${data.userId}`;
+        container.className = `stream-container stream-${data.userId}`;
+        container.style.cssText = 'position:relative; width:100%; height:100%; min-height:260px; background:#000; border-radius:10px; overflow:hidden; display:flex; align-items:center; justify-content:center;';
+
+        const label = document.createElement('div');
+        label.className = 'stream-label';
+        label.innerText = `💻 ${window.peerNames[data.userId] || 'Friend'} (Live Screen)`;
+
+        imgEl = document.createElement('img');
+        imgEl.id = `bridge-screen-img-${data.userId}`;
+        imgEl.style.cssText = 'width:100%; height:100%; max-height:65vh; object-fit:contain; display:block;';
+
+        container.appendChild(label);
+        container.appendChild(imgEl);
+        stageCont.appendChild(container);
+    }
+
+    if (imgEl) imgEl.src = data.frame;
+};
+
+// Transmissor de Tela em Canal Dedicado (WebP 480p ~5KB/frame -> 4 FPS suaves sem travar o chat nem a UI!)
+window.startScreenBridgeSender = function() {
+    if (window._screenBridgeInterval) clearInterval(window._screenBridgeInterval);
+    const offCanvas = document.createElement('canvas');
+    const offCtx = offCanvas.getContext('2d');
+    let encodingBusy = false;
+
+    window._screenBridgeInterval = setInterval(() => {
+        if (!window.localScreenStream || !window.socket || window.socket.readyState !== WebSocket.OPEN) {
+            clearInterval(window._screenBridgeInterval);
+            window._screenBridgeInterval = null;
+            return;
+        }
+        if (encodingBusy) return;
+
+        const peerIds = Object.keys(window.peerNames || {});
+        if (peerIds.length === 0) return;
+
+        // Continua enviando enquanto o amigo ainda não confirmou recepção do vídeo WebRTC nativo (`_peerAckedVideo`)
+        const needsScreenBridge = peerIds.some(uid => !window._peerAckedVideo[uid]);
+        if (!needsScreenBridge) return;
+
+        const localVideo = document.getElementById('local-screen-video');
+        if (!localVideo || localVideo.videoWidth === 0 || localVideo.videoHeight === 0) return;
+
+        // 480x270 em WebP 0.38 gera frames de apenas ~4.5 KB (passa instantaneamente pelo broker de mídia a ~4 FPS!)
+        const targetW = Math.min(480, localVideo.videoWidth);
+        const scale = targetW / localVideo.videoWidth;
+        const targetH = Math.round(localVideo.videoHeight * scale);
+
+        if (offCanvas.width !== targetW) offCanvas.width = targetW;
+        if (offCanvas.height !== targetH) offCanvas.height = targetH;
+
+        offCtx.drawImage(localVideo, 0, 0, targetW, targetH);
+        encodingBusy = true;
+
+        offCanvas.toBlob((blob) => {
+            if (!blob || !window.localScreenStream) {
+                encodingBusy = false;
+                return;
+            }
+            const reader = new FileReader();
+            reader.onloadend = () => {
+                encodingBusy = false;
+                const base64Url = reader.result;
+                if (base64Url && window.socket && window.socket.readyState === WebSocket.OPEN) {
+                    window.socket.send(JSON.stringify({
+                        action: 'screen_frame',
+                        userId: window.myId,
+                        ts: Date.now(),
+                        frame: base64Url
+                    }));
+                }
+            };
+            reader.readAsDataURL(blob);
+        }, 'image/webp', 0.38);
+    }, 260);
+};
+
 window.rebuildMicPipeline = async function() {
     if (!window.audioCtx) window.initAudioCtx();
+    if (window.audioCtx.state === 'suspended') await window.audioCtx.resume().catch(() => {});
+
     window._micGeneration = (window._micGeneration || 0) + 1;
     const myGen = window._micGeneration;
     const micId = localStorage.getItem('appAudioIn');
-
-    const useEchoCancel = localStorage.getItem('appEchoCancel') === 'true';
     const useAiSuppression = localStorage.getItem('appAiNoise') !== 'false';
-
-    if (window._gateInterval) {
-        clearInterval(window._gateInterval);
-        window._gateInterval = null;
-    }
 
     if (window._rawMicStream) {
         window._rawMicStream.getTracks().forEach(t => t.stop());
@@ -192,23 +328,19 @@ window.rebuildMicPipeline = async function() {
     }
 
     [
-        '_micSourceNode', '_micHighPass', '_micLowPass', '_micSuppressor',
-        '_micAnalyser', '_micGateGain', '_micWarmthEQ', '_micMudCutEQ',
-        '_micPresenceEQ', '_micCompressor', '_micMakeupGain',
-        '_micBridgeProcessor', '_micBridgeMute'
+        '_micSourceNode', '_micHighPass', '_micSuppressor', '_micCompressor',
+        '_micGain', '_micBridgeFilter', '_micBridgeProcessor', '_micBridgeKeepAlive'
     ].forEach(k => {
         try { window[k]?.disconnect(); } catch(e) {}
         try { window[k]?.destroy?.(); } catch(e) {}
         window[k] = null;
     });
 
-    // IMPORTANTE: Sem `latency: 0.01`, sem `sampleRate` forçado e usando `ideal` em vez de `exact`.
-    // Isso permite que o Windows compartilhe o microfone em Modo Compartilhado (Shared Mode)
-    // com o Discord e o WhatsApp sem nunca derrubar chamadas externas!
     const baseAudioCfg = {
-        echoCancellation: useEchoCancel,
-        noiseSuppression: false,
-        autoGainControl: false,
+        echoCancellation: false,
+        noiseSuppression: true,
+        autoGainControl: true,
+        sampleRate: { ideal: 48000 },
         channelCount: { ideal: 1 }
     };
 
@@ -227,130 +359,125 @@ window.rebuildMicPipeline = async function() {
     const destination = window.audioCtx.createMediaStreamDestination();
 
     const highPass = window.audioCtx.createBiquadFilter();
+    highPass.channelCount = 1;
+    highPass.channelCountMode = 'explicit';
     highPass.type = 'highpass';
-    highPass.frequency.setValueAtTime(95, nowTime);
+    highPass.frequency.setValueAtTime(85, nowTime);
     highPass.Q.setValueAtTime(0.707, nowTime);
 
-    const lowPass = window.audioCtx.createBiquadFilter();
-    lowPass.type = 'lowpass';
-    lowPass.frequency.setValueAtTime(12000, nowTime);
-    lowPass.Q.setValueAtTime(0.707, nowTime);
+    const compressor = window.audioCtx.createDynamicsCompressor();
+    compressor.threshold.setValueAtTime(-12, nowTime);
+    compressor.knee.setValueAtTime(8, nowTime);
+    compressor.ratio.setValueAtTime(4.0, nowTime);
+    compressor.attack.setValueAtTime(0.003, nowTime);
+    compressor.release.setValueAtTime(0.15, nowTime);
+
+    const micGain = window.audioCtx.createGain();
+    micGain.gain.setValueAtTime(0.95, nowTime);
 
     source.connect(highPass);
-    highPass.connect(lowPass);
-    let head = lowPass;
+    let head = highPass;
 
-    if (useAiSuppression && window.loadKrispRNNoiseNode) {
+    if (useAiSuppression && window.loadKrispRNNoiseNode && window.audioCtx.sampleRate === 48000) {
         try {
             const suppressor = await window.loadKrispRNNoiseNode(window.audioCtx);
             head.connect(suppressor);
             head = suppressor;
             window._micSuppressor = suppressor;
-        } catch (e) {
-            console.warn("RNNoise fallback to spectral gate:", e);
-        }
+        } catch (e) {}
     }
 
-    const analyser = window.audioCtx.createAnalyser();
-    analyser.fftSize = 512; // Reduzido de 1024 para 512 (metade do custo de FFT na CPU)
-    analyser.smoothingTimeConstant = 0.2;
-    const timeArray = new Float32Array(analyser.fftSize);
-    const freqArray = new Float32Array(analyser.frequencyBinCount);
+    head.connect(compressor);
+    compressor.connect(micGain);
+    micGain.connect(destination);
 
-    const gateGain = window.audioCtx.createGain();
-    gateGain.gain.setValueAtTime(0.0, nowTime);
+    // Filtro anti-aliasing para a Ponte de Voz 16kHz 16-bit (ativa imediatamente até que o amigo confirme WebRTC P2P!)
+    const bridgeFilter = window.audioCtx.createBiquadFilter();
+    bridgeFilter.type = 'lowpass';
+    bridgeFilter.frequency.setValueAtTime(7200, nowTime);
+    bridgeFilter.Q.setValueAtTime(0.707, nowTime);
 
-    head.connect(analyser);
-    head.connect(gateGain);
+    const bridgeProcessor = window.audioCtx.createScriptProcessor(2048, 1, 1);
+    const keepAliveGain = window.audioCtx.createGain();
+    keepAliveGain.gain.value = 0.00001;
 
-    const warmthEQ = window.audioCtx.createBiquadFilter();
-    warmthEQ.type = 'peaking';
-    warmthEQ.frequency.setValueAtTime(140, nowTime);
-    warmthEQ.Q.setValueAtTime(1.1, nowTime);
-    warmthEQ.gain.setValueAtTime(1.8, nowTime);
+    micGain.connect(bridgeFilter);
+    bridgeFilter.connect(bridgeProcessor);
+    bridgeProcessor.connect(keepAliveGain);
+    keepAliveGain.connect(window.audioCtx.destination);
 
-    const mudCutEQ = window.audioCtx.createBiquadFilter();
-    mudCutEQ.type = 'peaking';
-    mudCutEQ.frequency.setValueAtTime(320, nowTime);
-    mudCutEQ.Q.setValueAtTime(1.4, nowTime);
-    mudCutEQ.gain.setValueAtTime(-2.5, nowTime);
+    let int16Queue = [];
+    const targetSr = 16000;
+    const step = Math.max(1, Math.round(window.audioCtx.sampleRate / targetSr));
+    let lastVoiceDetectedAt = 0;
 
-    const presenceEQ = window.audioCtx.createBiquadFilter();
-    presenceEQ.type = 'highshelf';
-    presenceEQ.frequency.setValueAtTime(5500, nowTime);
-    presenceEQ.gain.setValueAtTime(2.0, nowTime);
-
-    const compressor = window.audioCtx.createDynamicsCompressor();
-    compressor.threshold.setValueAtTime(-24, nowTime);
-    compressor.knee.setValueAtTime(12, nowTime);
-    compressor.ratio.setValueAtTime(3.5, nowTime);
-    compressor.attack.setValueAtTime(0.004, nowTime);
-    compressor.release.setValueAtTime(0.20, nowTime);
-
-    const makeupGain = window.audioCtx.createGain();
-    makeupGain.gain.setValueAtTime(1.45, nowTime);
-
-    gateGain.connect(warmthEQ);
-    warmthEQ.connect(mudCutEQ);
-    mudCutEQ.connect(presenceEQ);
-    presenceEQ.connect(compressor);
-    compressor.connect(makeupGain);
-    makeupGain.connect(destination);
-
-    // Buffer de 4096 reduz as interrupções na thread principal pela metade
-    const bridgeProcessor = window.audioCtx.createScriptProcessor(4096, 1, 1);
-    const bridgeMute = window.audioCtx.createGain();
-    bridgeMute.gain.value = 0;
-    makeupGain.connect(bridgeProcessor);
-    bridgeProcessor.connect(bridgeMute);
-    bridgeMute.connect(window.audioCtx.destination);
-
-    let isGateOpen = false;
-    let lastOpenTime = 0;
-    let consecutiveVoiceFrames = 0;
-    const holdTimeMs = 240;
-
-    let bridgeFrameCounter = 0;
     bridgeProcessor.onaudioprocess = (ev) => {
-        if (myGen !== window._micGeneration || window.isMuted || !window.inVoiceCall || !isGateOpen) return;
+        const input = ev.inputBuffer.getChannelData(0);
+        const output = ev.outputBuffer.getChannelData(0);
+        for (let i = 0; i < output.length; i++) output[i] = 0;
+
+        if (myGen !== window._micGeneration || window.isMuted || !window.inVoiceCall) {
+            int16Queue = [];
+            return;
+        }
         if (!window.socket || window.socket.readyState !== WebSocket.OPEN) return;
 
-        const activeCallPeers = Object.keys(window.peerNames || {}).filter(uid => window.peerInCall && window.peerInCall[uid]);
-        if (activeCallPeers.length === 0) return;
+        const roomPeers = Object.keys(window.peerNames || {});
+        if (roomPeers.length === 0) return;
 
-        const needsBridge = activeCallPeers.some(uid => {
-            const pc = window.peers[uid];
-            return !pc || (pc.iceConnectionState !== 'connected' && pc.iceConnectionState !== 'completed');
-        });
-        if (!needsBridge) return;
-
-        bridgeFrameCounter++;
-        if (bridgeFrameCounter % 2 !== 0) return;
-
-        const input = ev.inputBuffer.getChannelData(0);
-        const outLen = Math.floor(input.length / 3);
-        const int16 = new Int16Array(outLen);
-        for (let i = 0, j = 0; i < outLen; i++, j += 3) {
-            const s = Math.max(-1, Math.min(1, (input[j] + input[j + 1] + input[j + 2]) / 3));
-            int16[i] = s < 0 ? s * 0x8000 : s * 0x7FFF;
+        // Continua transmitindo pela ponte até que o amigo confirme explicitamente ('audio_ack') que o WebRTC P2P está tocando!
+        const needsBridge = roomPeers.some(uid => !window._peerAckedAudio[uid]);
+        if (!needsBridge) {
+            int16Queue = [];
+            return;
         }
 
-        const bytes = new Uint8Array(int16.buffer);
-        let binary = '';
-        for (let i = 0; i < bytes.byteLength; i++) {
-            binary += String.fromCharCode(bytes[i]);
+        let sum = 0;
+        for (let i = 0; i < input.length; i += 4) sum += input[i] * input[i];
+        const rms = Math.sqrt(sum / (input.length / 4));
+
+        const slider = document.getElementById('noise-gate-slider');
+        const threshold = slider ? Math.min(0.015, Math.max(0.0008, parseFloat(slider.value) * 0.3)) : 0.0015;
+        const nowMs = performance.now();
+
+        if (rms >= threshold) {
+            lastVoiceDetectedAt = nowMs;
         }
 
-        window.socket.send(JSON.stringify({
-            action: 'voice_frame',
-            userId: window.myId,
-            sr: Math.round(window.audioCtx.sampleRate / 3),
-            d: btoa(binary)
-        }));
+        if (nowMs - lastVoiceDetectedAt > 240) {
+            int16Queue = [];
+            return;
+        }
+
+        for (let j = 0; j < input.length; j += step) {
+            // Soft-clipper suave (Math.tanh): 0% de chance de estourar/clipar o áudio!
+            const s = Math.tanh(input[j] * 0.9);
+            int16Queue.push(Math.round(s * 32767));
+        }
+
+        // Pacotes curtos de 120ms (1920 amostras @ 16kHz) para baixa latência!
+        if (int16Queue.length >= 1920) {
+            const int16Arr = new Int16Array(int16Queue);
+            int16Queue = [];
+            const bytes = new Uint8Array(int16Arr.buffer);
+            let binary = '';
+            for (let i = 0; i < bytes.byteLength; i++) {
+                binary += String.fromCharCode(bytes[i]);
+            }
+
+            window.socket.send(JSON.stringify({
+                action: 'voice_frame',
+                userId: window.myId,
+                fmt: 'i16',
+                sr: Math.round(window.audioCtx.sampleRate / step),
+                ts: Date.now(),
+                d: btoa(binary)
+            }));
+        }
     };
 
     const oldMicTrack = window.localMicStream?.getAudioTracks()[0] || window._lastMicTrack;
-    const newTrack = destination.stream.getAudioTracks()[0];
+    const newTrack = destination.stream.getAudioTracks()[0] || rawStream.getAudioTracks()[0];
     newTrack.enabled = !window.isMuted;
     if ('contentHint' in newTrack) newTrack.contentHint = 'speech';
     window._lastMicTrack = newTrack;
@@ -365,92 +492,33 @@ window.rebuildMicPipeline = async function() {
         }
     });
 
-    window.localMicStream?.getTracks().forEach(t => t.stop());
     window.localMicStream = destination.stream;
-
     window._micSourceNode = source;
     window._micHighPass = highPass;
-    window._micLowPass = lowPass;
-    window._micWarmthEQ = warmthEQ;
-    window._micMudCutEQ = mudCutEQ;
-    window._micPresenceEQ = presenceEQ;
     window._micCompressor = compressor;
-    window._micMakeupGain = makeupGain;
-    window._micGateGain = gateGain;
-    window._micAnalyser = analyser;
+    window._micGain = micGain;
+    window._micBridgeFilter = bridgeFilter;
     window._micBridgeProcessor = bridgeProcessor;
-    window._micBridgeMute = bridgeMute;
-
-    // OTIMIZAÇÃO DE CPU: Roda a cada 40ms (25 vezes/seg) em vez de 144-240 vezes/seg no requestAnimationFrame!
-    window._gateInterval = setInterval(() => {
-        if (myGen !== window._micGeneration || !window.localMicStream) {
-            clearInterval(window._gateInterval);
-            return;
-        }
-        if (window.isMuted) {
-            if (isGateOpen) {
-                isGateOpen = false;
-                gateGain.gain.setTargetAtTime(0.0, window.audioCtx.currentTime, 0.05);
-            }
-            return;
-        }
-
-        analyser.getFloatTimeDomainData(timeArray);
-        let sum = 0;
-        for (let i = 0; i < timeArray.length; i++) {
-            sum += timeArray[i] * timeArray[i];
-        }
-        const rms = Math.sqrt(sum / timeArray.length);
-
-        const slider = document.getElementById('noise-gate-slider');
-        const openThreshold = slider ? Math.max(0.003, parseFloat(slider.value)) : 0.008;
-        const closeThreshold = openThreshold * 0.45;
-        const now = performance.now();
-
-        if (!isGateOpen) {
-            // Só calcula o FFT de frequências quando o volume realmente passa do threshold!
-            if (rms > openThreshold) {
-                analyser.getFloatFrequencyData(freqArray);
-                let vocalDbSum = 0;
-                for (let b = 1; b <= 10; b++) vocalDbSum += freqArray[b];
-                const vocalAvgDb = vocalDbSum / 10;
-
-                let clackDbSum = 0;
-                for (let b = 26; b <= 80; b++) clackDbSum += freqArray[b];
-                const clackAvgDb = clackDbSum / 55;
-
-                const isVocalSpectrum = (vocalAvgDb - clackAvgDb) > 5.5;
-                if (isVocalSpectrum) {
-                    consecutiveVoiceFrames++;
-                    if (consecutiveVoiceFrames >= 1) {
-                        isGateOpen = true;
-                        lastOpenTime = now;
-                        gateGain.gain.setTargetAtTime(1.0, window.audioCtx.currentTime, 0.008);
-                    }
-                } else {
-                    consecutiveVoiceFrames = 0;
-                }
-            } else {
-                consecutiveVoiceFrames = 0;
-            }
-        } else {
-            if (rms > closeThreshold) {
-                lastOpenTime = now;
-            } else if (now - lastOpenTime > holdTimeMs) {
-                isGateOpen = false;
-                consecutiveVoiceFrames = 0;
-                gateGain.gain.setTargetAtTime(0.0, window.audioCtx.currentTime, 0.07);
-            }
-        }
-    }, 40);
+    window._micBridgeKeepAlive = keepAliveGain;
 
     return destination.stream;
 };
 
+window.tuneVideoSenderBitrate = async function(sender) {
+    if (!sender || !sender.getParameters) return;
+    try {
+        const params = sender.getParameters();
+        if (!params.encodings || params.encodings.length === 0) params.encodings = [{}];
+        params.encodings[0].maxBitrate = 2500000;
+        params.encodings[0].maxFramerate = 30;
+        params.encodings[0].priority = 'high';
+        await sender.setParameters(params);
+    } catch (e) {}
+};
+
 window.addLocalTracksSafely = function(pc) {
-    if (!window.audioCtx) window.initAudioCtx();
     const sentTracks = pc.getSenders().map(s => s.track).filter(Boolean);
-    const streams = [window.localMicStream, window.localScreenStream, window.localCamStream, window.soundboardDest?.stream].filter(Boolean);
+    const streams = [window.localMicStream, window.localScreenStream, window.localCamStream].filter(Boolean);
     
     streams.forEach(stream => {
         stream.getTracks().forEach(track => {
@@ -459,6 +527,8 @@ window.addLocalTracksSafely = function(pc) {
                     const sender = pc.addTrack(track, stream);
                     if (track.kind === 'audio' && window.boostAudioSenderBitrate) {
                         window.boostAudioSenderBitrate(sender);
+                    } else if (track.kind === 'video') {
+                        window.tuneVideoSenderBitrate(sender);
                     }
                 } catch(e){}
             }
@@ -480,12 +550,22 @@ window.flushCandidateQueue = async function(remoteUserId) {
 
 window.sendOfferSafely = async function(pc, remoteUserId, iceRestart = false) {
     if (!window.socket || window.socket.readyState !== WebSocket.OPEN) return;
-    if (window.makingOffer[remoteUserId]) return;
-    if (pc.signalingState !== 'stable' && !iceRestart) return;
+    if (window.makingOffer[remoteUserId]) {
+        window.pendingRenegotiation[remoteUserId] = true;
+        return;
+    }
+
+    if (pc.signalingState !== 'stable' && !iceRestart) {
+        window.pendingRenegotiation[remoteUserId] = true;
+        return;
+    }
 
     try {
         window.makingOffer[remoteUserId] = true;
+        window.pendingRenegotiation[remoteUserId] = false;
+
         const offer = await pc.createOffer(iceRestart ? { iceRestart: true } : {});
+        if (pc.signalingState !== 'stable' && !iceRestart) return;
         await pc.setLocalDescription(offer);
 
         const outboundOffer = {
@@ -497,8 +577,19 @@ window.sendOfferSafely = async function(pc, remoteUserId, iceRestart = false) {
             action: 'offer',
             userId: window.myId,
             targetId: remoteUserId,
-            offer: outboundOffer
+            offer: outboundOffer,
+            ts: Date.now()
         }));
+
+        clearTimeout(window.offerStuckTimers[remoteUserId]);
+        window.offerStuckTimers[remoteUserId] = setTimeout(async () => {
+            if (pc.signalingState === 'have-local-offer') {
+                try { await pc.setLocalDescription({ type: "rollback" }); } catch (e) {}
+                if (window.myId < remoteUserId) {
+                    window.sendOfferSafely(pc, remoteUserId, true);
+                }
+            }
+        }, 6000);
     } catch (e) {
         console.warn("sendOfferSafely error:", e);
     } finally {
@@ -511,6 +602,8 @@ window.createPeerConnection = function(remoteUserId) {
 
     const pc = new RTCPeerConnection(window.rtcConfig);
     window.peers[remoteUserId] = pc;
+    window.ignoreOffer[remoteUserId] = false;
+    window._peerCreatedAt[remoteUserId] = Date.now();
 
     pc.onicecandidate = (event) => { 
         if (event.candidate && window.socket && window.socket.readyState === WebSocket.OPEN) {
@@ -518,8 +611,9 @@ window.createPeerConnection = function(remoteUserId) {
                 action: 'ice-candidate',
                 userId: window.myId,
                 targetId: remoteUserId,
-                candidate: event.candidate
-            })); 
+                candidate: event.candidate,
+                ts: Date.now()
+            }));
         }
     };
 
@@ -538,10 +632,10 @@ window.createPeerConnection = function(remoteUserId) {
             statusEl.style.display = 'block';
             if (state === 'connected' || state === 'completed') {
                 statusEl.style.color = '#10b981';
-                statusEl.innerText = 'Call: Ultra-HD 256kbps P2P 🟢';
-            } else if (window.localMicStream) {
+                statusEl.innerText = 'Call: Studio 256kbps P2P 🟢';
+            } else {
                 statusEl.style.color = '#10b981';
-                statusEl.innerText = 'Call: Ultra-HD Connected 🟢';
+                statusEl.innerText = 'Call: Studio Voice Active 🟢';
             }
         }
 
@@ -550,17 +644,27 @@ window.createPeerConnection = function(remoteUserId) {
         }
 
         if (state === 'disconnected') {
+            window._peerAckedAudio[remoteUserId] = false;
+            window._peerAckedVideo[remoteUserId] = false;
+            window._webrtcAudioActive[remoteUserId] = false;
             clearTimeout(window.disconnectTimers[remoteUserId]);
-            window.disconnectTimers[remoteUserId] = setTimeout(triggerIceRecovery, 6000);
+            window.disconnectTimers[remoteUserId] = setTimeout(triggerIceRecovery, 4000);
         }
 
         if (state === 'failed') {
+            window._peerAckedAudio[remoteUserId] = false;
+            window._peerAckedVideo[remoteUserId] = false;
+            window._webrtcAudioActive[remoteUserId] = false;
             clearTimeout(window.disconnectTimers[remoteUserId]);
             await triggerIceRecovery();
         }
 
         if (state === 'closed') {
+            window._peerAckedAudio[remoteUserId] = false;
+            window._peerAckedVideo[remoteUserId] = false;
+            window._webrtcAudioActive[remoteUserId] = false;
             clearTimeout(window.disconnectTimers[remoteUserId]);
+            clearTimeout(window.offerStuckTimers[remoteUserId]);
             document.querySelectorAll(`.stream-${remoteUserId}`).forEach(el => el.remove());
             delete window.peers[remoteUserId]; 
             delete window.iceCandidateQueue[remoteUserId];
@@ -577,14 +681,14 @@ window.createPeerConnection = function(remoteUserId) {
         event.track.onended = () => { 
             const aud = document.getElementById(`audio-${event.track.id}`); if (aud) aud.remove(); 
             const vid = document.getElementById(`video-container-${event.track.id}`); if (vid) vid.remove();
+            if (event.track.kind === 'audio') window._webrtcAudioActive[remoteUserId] = false;
         };
 
         if (event.track.kind === 'audio') {
-            if (!window.audioCtx) window.initAudioCtx();
-
-            let audioCont = document.getElementById('remote-audio-container');
+            let audioCont = document.getElementById('hidden-audio-sinks');
             if (!audioCont) {
-                audioCont = document.createElement('div'); audioCont.id = 'remote-audio-container';
+                audioCont = document.createElement('div');
+                audioCont.id = 'hidden-audio-sinks';
                 audioCont.style.cssText = 'width:0; height:0; position:absolute; overflow:hidden; opacity:0; pointer-events:none;';
                 document.body.appendChild(audioCont);
             }
@@ -595,22 +699,36 @@ window.createPeerConnection = function(remoteUserId) {
                 remoteAudio.id = `audio-${event.track.id}`; 
                 remoteAudio.className = `stream-${remoteUserId}`;
                 remoteAudio.autoplay = true;
-                
-                try {
-                    remoteAudio.muted = true;
-                    const remoteSource = window.audioCtx.createMediaStreamSource(stream);
-                    const remoteGain = window.getOrCreateRemoteGain(remoteUserId);
-                    remoteSource.connect(remoteGain);
-                } catch (err) {
-                    remoteAudio.muted = false;
-                    const outId = localStorage.getItem('appAudioOut'); 
-                    if (outId && typeof remoteAudio.setSinkId === 'function') remoteAudio.setSinkId(outId).catch(()=>{});
-                }
-
+                remoteAudio.playsInline = true;
                 audioCont.appendChild(remoteAudio);
             }
+
+            const slider = document.getElementById(`vol-${remoteUserId}`);
+            const savedVol = slider ? parseFloat(slider.value) : 1.0;
+            remoteAudio.muted = !window.inVoiceCall;
+            remoteAudio.volume = window.inVoiceCall ? Math.min(1.0, savedVol) : 0.0;
             remoteAudio.srcObject = stream;
-            remoteAudio.play().catch(()=>{});
+
+            const outId = localStorage.getItem('appAudioOut'); 
+            if (outId && outId !== 'default' && typeof remoteAudio.setSinkId === 'function') {
+                remoteAudio.setSinkId(outId).catch(() => {});
+            }
+
+            remoteAudio.onplaying = () => {
+                window._webrtcAudioActive[remoteUserId] = true;
+                window.stopBridgeSourcesForPeer(remoteUserId);
+                if (window.socket && window.socket.readyState === WebSocket.OPEN) {
+                    window.socket.send(JSON.stringify({
+                        action: 'audio_ack',
+                        userId: window.myId,
+                        targetId: remoteUserId,
+                        ts: Date.now()
+                    }));
+                }
+            };
+
+            remoteAudio.play().catch(() => {});
+            window.remoteAudioEls[remoteUserId] = remoteAudio;
         }
         
         if (event.track.kind === 'video') {
@@ -620,19 +738,35 @@ window.createPeerConnection = function(remoteUserId) {
                 videoContainer.id = `video-container-${event.track.id}`; 
                 videoContainer.className = `stream-container stream-${remoteUserId}`;
                 
-                const label = document.createElement('div'); label.className = "stream-label"; 
-                label.innerText = window.peerNames[remoteUserId] || 'Friend';
+                const label = document.createElement('div');
+                label.className = "stream-label"; 
+                label.innerText = `💻 ${window.peerNames[remoteUserId] || 'Friend'}`;
                 
                 const remoteVideo = document.createElement('video'); 
                 remoteVideo.id = `video-${event.track.id}`; 
-                remoteVideo.autoplay = true; remoteVideo.playsInline = true; remoteVideo.controls = true; 
+                remoteVideo.autoplay = true;
+                remoteVideo.playsInline = true;
+                remoteVideo.controls = true; 
                 remoteVideo.srcObject = stream;
+
+                remoteVideo.onplaying = () => {
+                    const oldBr = document.getElementById(`bridge-screen-container-${remoteUserId}`);
+                    if (oldBr) oldBr.remove();
+                    if (window.socket && window.socket.readyState === WebSocket.OPEN) {
+                        window.socket.send(JSON.stringify({
+                            action: 'video_ack',
+                            userId: window.myId,
+                            targetId: remoteUserId,
+                            ts: Date.now()
+                        }));
+                    }
+                };
                 
-                videoContainer.appendChild(label); videoContainer.appendChild(remoteVideo); 
+                videoContainer.appendChild(label);
+                videoContainer.appendChild(remoteVideo); 
                 
-                let grid = document.getElementById('video-grid');
-                if (!grid) { grid = document.createElement('div'); grid.id = 'video-grid'; document.body.appendChild(grid); }
-                (grid.querySelector('.panel-content') || grid).appendChild(videoContainer);
+                const stageCont = document.getElementById('remote-audio-container') || document.querySelector('#video-grid .panel-content') || document.getElementById('video-grid');
+                if (stageCont) stageCont.appendChild(videoContainer);
                 
                 remoteVideo.play().catch(()=>{});
             }
@@ -650,20 +784,60 @@ window.renegotiatePeers = async function() {
     }
 };
 
+window.startCallConnectionWatchdog = function() {
+    if (window._callWatchdogInterval) clearInterval(window._callWatchdogInterval);
+    window._callWatchdogInterval = setInterval(async () => {
+        if (!window.inVoiceCall && !window.localScreenStream && !window.localCamStream) {
+            clearInterval(window._callWatchdogInterval);
+            window._callWatchdogInterval = null;
+            return;
+        }
+
+        for (const uid of Object.keys(window.peerNames || {})) {
+            const peerWantsMedia = (window.peerInCall && window.peerInCall[uid]) || window.localScreenStream || window.localCamStream;
+            if (!peerWantsMedia) continue;
+
+            let pc = window.peers[uid];
+            const state = pc ? pc.iceConnectionState : 'none';
+
+            if (!pc || state === 'closed' || state === 'failed') {
+                if (pc) { try { pc.close(); } catch (e) {} delete window.peers[uid]; }
+                pc = window.createPeerConnection(uid);
+                window.addLocalTracksSafely(pc);
+                if (window.myId < uid || !window.peerInCall[uid]) {
+                    await window.sendOfferSafely(pc, uid, false);
+                }
+            } else if (state === 'new' && pc.signalingState === 'stable') {
+                window.addLocalTracksSafely(pc);
+                if (window.myId < uid || !window.peerInCall[uid]) {
+                    await window.sendOfferSafely(pc, uid, false);
+                }
+            }
+        }
+    }, 4000);
+};
+
 window.handleWebRTCSignal = async function(data) {
     if ((data.action === 'join' || data.action === 'presence') && data.userId !== window.myId) {
         if (data.action === 'presence' && data.targetId && data.targetId !== window.myId) return;
 
-        // Só cria RTCPeerConnection se alguém estiver em chamada ou transmitindo!
-        if (window.inVoiceCall || data.inCall || window.localMicStream || window.localCamStream || window.localScreenStream) {
-            let pc = window.peers[data.userId];
-            if (!pc) pc = window.createPeerConnection(data.userId);
+        const existingPc = window.peers[data.userId];
+        const ageMs = Date.now() - (window._peerCreatedAt[data.userId] || 0);
+        const isDead = existingPc && (existingPc.iceConnectionState === 'closed' || (existingPc.iceConnectionState === 'failed' && ageMs > 8000));
 
-            if (window.localMicStream || window.localCamStream || window.localScreenStream) {
-                window.addLocalTracksSafely(pc);
-                if (pc.signalingState === 'stable') {
-                    await window.sendOfferSafely(pc, data.userId, false);
-                }
+        if (isDead) {
+            try { existingPc.close(); } catch (e) {}
+            delete window.peers[data.userId];
+        }
+
+        const pc = window.peers[data.userId];
+        const isUnconnected = !pc || (pc.iceConnectionState === 'new' && pc.signalingState === 'stable');
+
+        if (isUnconnected && (window.inVoiceCall || window.localMicStream || window.localCamStream || window.localScreenStream)) {
+            const activePc = pc || window.createPeerConnection(data.userId);
+            window.addLocalTracksSafely(activePc);
+            if (!data.inCall || window.myId < data.userId) {
+                await window.sendOfferSafely(activePc, data.userId, false);
             }
         }
     }
@@ -677,15 +851,13 @@ window.handleWebRTCSignal = async function(data) {
             window.ignoreOffer[data.userId] = !isPolite && offerCollision;
             if (window.ignoreOffer[data.userId]) return;
 
+            clearTimeout(window.offerStuckTimers[data.userId]);
             if (offerCollision) {
-                await Promise.all([
-                    pc.setLocalDescription({ type: "rollback" }),
-                    pc.setRemoteDescription(new RTCSessionDescription(data.offer))
-                ]);
-            } else {
-                await pc.setRemoteDescription(new RTCSessionDescription(data.offer));
+                try { await pc.setLocalDescription({ type: "rollback" }); } catch (rbErr) {}
             }
+            await pc.setRemoteDescription(new RTCSessionDescription(data.offer));
 
+            window.ignoreOffer[data.userId] = false;
             await window.flushCandidateQueue(data.userId);
             window.addLocalTracksSafely(pc);
 
@@ -701,8 +873,14 @@ window.handleWebRTCSignal = async function(data) {
                 action: 'answer',
                 userId: window.myId,
                 targetId: data.userId,
-                answer: outboundAnswer
+                answer: outboundAnswer,
+                ts: Date.now()
             }));
+
+            if (window.pendingRenegotiation[data.userId]) {
+                window.pendingRenegotiation[data.userId] = false;
+                setTimeout(() => window.sendOfferSafely(pc, data.userId, false), 120);
+            }
         } catch(e) {
             console.warn("Offer handling error:", e);
         }
@@ -711,24 +889,42 @@ window.handleWebRTCSignal = async function(data) {
         const pc = window.peers[data.userId];
         if (pc && pc.signalingState === 'have-local-offer') {
             try {
+                clearTimeout(window.offerStuckTimers[data.userId]);
+                window.ignoreOffer[data.userId] = false;
                 await pc.setRemoteDescription(new RTCSessionDescription(data.answer));
                 await window.flushCandidateQueue(data.userId);
+
+                if (window.pendingRenegotiation[data.userId]) {
+                    window.pendingRenegotiation[data.userId] = false;
+                    setTimeout(() => {
+                        window.addLocalTracksSafely(pc);
+                        window.sendOfferSafely(pc, data.userId, false);
+                    }, 100);
+                }
             } catch(e) {
                 console.warn("Answer handling error:", e);
             }
         }
     }
-    else if (data.action === 'ice-candidate' && data.targetId === window.myId) {
+    else if ((data.action === 'ice-candidate' || data.action === 'ice-candidates') && data.targetId === window.myId) {
         let pc = window.peers[data.userId];
         if (!pc) pc = window.createPeerConnection(data.userId);
         if (window.ignoreOffer[data.userId]) return;
 
-        const candidate = new RTCIceCandidate(data.candidate);
-        if (pc.remoteDescription && pc.remoteDescription.type) {
-            try { await pc.addIceCandidate(candidate); } catch(e){}
-        } else { 
-            if (!window.iceCandidateQueue[data.userId]) window.iceCandidateQueue[data.userId] = []; 
-            window.iceCandidateQueue[data.userId].push(candidate); 
+        const list = data.candidates || (data.candidate ? [data.candidate] : []);
+        for (const rawCand of list) {
+            const candidate = new RTCIceCandidate(rawCand);
+            if (pc.remoteDescription && pc.remoteDescription.type) {
+                try {
+                    await pc.addIceCandidate(candidate);
+                } catch (e) {
+                    if (!window.iceCandidateQueue[data.userId]) window.iceCandidateQueue[data.userId] = [];
+                    window.iceCandidateQueue[data.userId].push(candidate);
+                }
+            } else { 
+                if (!window.iceCandidateQueue[data.userId]) window.iceCandidateQueue[data.userId] = []; 
+                window.iceCandidateQueue[data.userId].push(candidate); 
+            }
         }
     }
 };
@@ -746,10 +942,6 @@ document.addEventListener('click', async (e) => {
         if (window.inVoiceCall) {
             window.inVoiceCall = false;
             window._micGeneration = (window._micGeneration || 0) + 1;
-            if (window._gateInterval) {
-                clearInterval(window._gateInterval);
-                window._gateInterval = null;
-            }
             if (window.playUiSound) window.playUiSound('leave_call');
 
             if (window._rawMicStream) {
@@ -773,6 +965,16 @@ document.addEventListener('click', async (e) => {
             Object.values(window.remoteGainNodes).forEach(g => {
                 try { g.gain.setTargetAtTime(0, window.audioCtx.currentTime, 0.01); } catch (err) {}
             });
+            Object.values(window.remoteAudioEls).forEach(a => {
+                try { a.muted = true; a.volume = 0; } catch (err) {}
+            });
+            Object.keys(window.peers).forEach(uid => {
+                try { window.peers[uid].close(); } catch (err) {}
+                delete window.peers[uid];
+            });
+            window._webrtcAudioActive = {};
+            window._peerAckedAudio = {};
+            window._peerAckedVideo = {};
 
             if (btn) {
                 btn.innerText = "🎙️ Join Call";
@@ -787,7 +989,7 @@ document.addEventListener('click', async (e) => {
             }
 
             if (window.socket && window.socket.readyState === WebSocket.OPEN) {
-                window.socket.send(JSON.stringify({ action: 'call_state', userId: window.myId, inCall: false }));
+                window.socket.send(JSON.stringify({ action: 'call_state', userId: window.myId, inCall: false, ts: Date.now() }));
             }
             if (window.renderConnectedUsers) window.renderConnectedUsers();
             return;
@@ -795,8 +997,9 @@ document.addEventListener('click', async (e) => {
 
         // JOIN VOICE CALL
         window.inVoiceCall = true;
+        window._peerAckedAudio = {};
         if (!window.audioCtx) window.initAudioCtx();
-        if (window.audioCtx.state === 'suspended') await window.audioCtx.resume();
+        if (window.audioCtx.state === 'suspended') await window.audioCtx.resume().catch(() => {});
         if (window.playUiSound) window.playUiSound('join_call');
 
         Object.keys(window.remoteGainNodes).forEach(uid => {
@@ -804,14 +1007,22 @@ document.addEventListener('click', async (e) => {
             const vol = saved !== undefined ? parseFloat(saved) : 1.0;
             try {
                 window.remoteGainNodes[uid].gain.setTargetAtTime(vol, window.audioCtx.currentTime, 0.01);
-                window.bridgeAudioEls[uid]?.play().catch(() => {});
+            } catch (err) {}
+        });
+        Object.keys(window.remoteAudioEls).forEach(uid => {
+            const saved = document.getElementById(`vol-${uid}`)?.value;
+            const vol = saved !== undefined ? parseFloat(saved) : 1.0;
+            try {
+                window.remoteAudioEls[uid].muted = false;
+                window.remoteAudioEls[uid].volume = Math.min(1.0, vol);
+                window.remoteAudioEls[uid].play().catch(() => {});
             } catch (err) {}
         });
 
         let micSuccess = false;
         try {
             await window.rebuildMicPipeline();
-            if (window.addChatLine) window.addChatLine('System', '🎙️ Joined Voice Channel (Shared-Mode Safe + Krisp RNNoise active).', 'system');
+            if (window.addChatLine) window.addChatLine('System', '🎙️ Joined Voice Channel (Dual-Engine Studio Voice active).', 'system');
             micSuccess = true;
         } catch (err) {
             if (window.addChatLine) window.addChatLine('System', '🎧 Joined Voice Channel in Listen-Only mode (No mic detected).', 'system');
@@ -820,7 +1031,7 @@ document.addEventListener('click', async (e) => {
         if (statusEl) {
             statusEl.style.display = 'block';
             statusEl.style.color = '#10b981';
-            statusEl.innerText = 'Call: Ultra-HD Connected 🟢';
+            statusEl.innerText = 'Call: Studio Voice Active 🟢';
         }
         if (btn) {
             btn.innerText = "📴 Leave Call";
@@ -830,11 +1041,12 @@ document.addEventListener('click', async (e) => {
         if (micSuccess && muteBtn) muteBtn.disabled = false;
 
         if (window.socket && window.socket.readyState === WebSocket.OPEN) {
-            window.socket.send(JSON.stringify({ action: 'call_state', userId: window.myId, inCall: true }));
+            window.socket.send(JSON.stringify({ action: 'call_state', userId: window.myId, inCall: true, ts: Date.now() }));
         }
         if (window.renderConnectedUsers) window.renderConnectedUsers();
 
-        await new Promise(r => setTimeout(r, 100)); 
+        window.startCallConnectionWatchdog();
+        await new Promise(r => setTimeout(r, 60)); 
         window.renegotiatePeers();
     }
 
@@ -866,9 +1078,12 @@ document.addEventListener('click', async (e) => {
         } else {
             try {
                 const camId = localStorage.getItem('appVideoIn');
-                window.localCamStream = await navigator.mediaDevices.getUserMedia({ video: camId ? { deviceId: { ideal: camId } } : true });
+                window.localCamStream = await navigator.mediaDevices.getUserMedia({
+                    video: camId ? { deviceId: { ideal: camId }, width: { ideal: 640 }, height: { ideal: 360 }, frameRate: { ideal: 30 } } : { width: { ideal: 640 }, height: { ideal: 360 }, frameRate: { ideal: 30 } }
+                });
                 if (localCam) { localCam.style.display = 'block'; localCam.srcObject = window.localCamStream; }
                 btn.innerText = "📷 Stop Cam"; btn.classList.replace('secondary-btn', 'primary-btn');
+                window.startCallConnectionWatchdog();
                 window.renegotiatePeers();
             } catch (err) {}
         }
@@ -880,14 +1095,11 @@ document.addEventListener('click', async (e) => {
         const localVideo = document.getElementById('local-screen-video'); 
         
         if (window.localScreenStream) {
-            window._screenShareDuckingActive = false;
-            if (window._vocalPocketInterval) {
-                clearInterval(window._vocalPocketInterval);
-                window._vocalPocketInterval = null;
+            window._peerAckedVideo = {};
+            if (window._screenBridgeInterval) {
+                clearInterval(window._screenBridgeInterval);
+                window._screenBridgeInterval = null;
             }
-            ['_scrSource', '_scrSplitter', '_scrMerger', '_scrCanceller', '_scrVocalPocketEQ', '_scrGain'].forEach(k => {
-                try { window[k]?.disconnect(); } catch (err) {}
-            });
             window.localScreenStream.getTracks().forEach(t => {
                 t.stop();
                 Object.values(window.peers).forEach(pc => { const sender = pc.getSenders().find(s => s.track === t); if(sender) pc.removeTrack(sender); });
@@ -899,18 +1111,22 @@ document.addEventListener('click', async (e) => {
             window.localScreenStream = null;
             shareBtn.innerText = "💻 Share Screen"; shareBtn.classList.replace('primary-btn', 'secondary-btn');
             if (localVideo) { localVideo.style.display = 'none'; localVideo.srcObject = null; }
+            if (window.socket && window.socket.readyState === WebSocket.OPEN) {
+                window.socket.send(JSON.stringify({ action: 'screen_stop', userId: window.myId, ts: Date.now() }));
+            }
             window.renegotiatePeers();
             return;
         }
         
         try {
             window._screenPickerCancelled = false;
+            window._peerAckedVideo = {};
             const screenConfig = { 
                 video: { 
                     cursor: "always",
-                    frameRate: { ideal: 30, max: 60 },
-                    width: { ideal: 1920, max: 1920 },
-                    height: { ideal: 1080, max: 1080 }
+                    frameRate: { ideal: 30, max: 30 },
+                    width: { ideal: 1280, max: 1280 },
+                    height: { ideal: 720, max: 720 }
                 }, 
                 audio: {
                     echoCancellation: false,
@@ -931,26 +1147,23 @@ document.addEventListener('click', async (e) => {
             }
 
             window.rawScreenStream = capturedStream;
+            const vidTrack = capturedStream.getVideoTracks()[0];
+            if (vidTrack && 'contentHint' in vidTrack) vidTrack.contentHint = 'motion';
 
-            if (capturedStream.getAudioTracks().length > 0 && window.buildCleanScreenAudioPipeline) {
-                const cleanAudioTrack = window.buildCleanScreenAudioPipeline(capturedStream);
-                window.localScreenStream = new MediaStream([
-                    capturedStream.getVideoTracks()[0],
-                    cleanAudioTrack
-                ]);
-            } else {
-                window.localScreenStream = capturedStream;
-            }
+            window.localScreenStream = capturedStream;
             
             shareBtn.innerText = "💻 Stop Share"; shareBtn.classList.replace('secondary-btn', 'primary-btn');
             if (localVideo) {
                 localVideo.muted = true;
                 localVideo.style.display = 'block';
                 localVideo.srcObject = window.localScreenStream;
+                localVideo.play().catch(() => {});
             }
-            window.renegotiatePeers();
+            window.startCallConnectionWatchdog();
+            await window.renegotiatePeers();
+            window.startScreenBridgeSender();
 
-            capturedStream.getVideoTracks()[0].onended = () => {
+            vidTrack.onended = () => {
                 if (window.localScreenStream) shareBtn.click();
             };
         } catch(err) {}

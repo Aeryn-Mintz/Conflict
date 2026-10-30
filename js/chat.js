@@ -1,9 +1,11 @@
 // ==========================================
-// CHAT ENGINE
+// CHAT ENGINE (js/chat.js)
+// Lightweight packets (<200 bytes) for 100% instant MQTT delivery
 // ==========================================
 window.addChatLine = function(author, text, type = 'normal', avatar = null) {
-    if (type === true) type = 'system'; // Retrocompatibilidade para os arquivos de mídia
-    const chatMessagesEl = document.getElementById('chat-messages'); if(!chatMessagesEl) return;
+    if (type === true) type = 'system';
+    const chatMessagesEl = document.getElementById('chat-messages');
+    if (!chatMessagesEl) return;
     
     const line = document.createElement('div'); 
     line.className = type === 'system' ? 'chat-line chat-system' : 'chat-line user-chat-line';
@@ -12,10 +14,12 @@ window.addChatLine = function(author, text, type = 'normal', avatar = null) {
     line.style.marginBottom = '12px'; 
     line.style.alignItems = 'flex-start';
 
-    let safeText = text;
-    // Trava de segurança: apenas mensagens normais de usuários perdem o HTML, dados e sistema fluem limpos
+    let safeText = String(text || '');
     if (type === 'normal') {
-        safeText = text.replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/\*\*(.*?)\*\*/g, '<strong style="color: var(--accent-main); font-weight: 900;">$1</strong>');
+        safeText = safeText
+            .replace(/</g, "&lt;")
+            .replace(/>/g, "&gt;")
+            .replace(/\*\*(.*?)\*\*/g, '<strong style="color: var(--accent-main); font-weight: 900;">$1</strong>');
     }
 
     if (type === 'system') {
@@ -23,7 +27,7 @@ window.addChatLine = function(author, text, type = 'normal', avatar = null) {
         safeText = safeText.replace(/\*\*(.*?)\*\*/g, '<strong style="color: var(--accent-main);">$1</strong>');
         line.innerHTML = `<div style="font-size: 11px; color: var(--text-muted); font-style: italic; background: rgba(0,0,0,0.3); padding: 4px 12px; border-radius: 12px;">${safeText}</div>`;
     } else {
-        const imgSrc = avatar || window.defaultAvatar || '';
+        const imgSrc = avatar || window.defaultAvatar || './Banaya.png';
         line.innerHTML = `
             <img src="${imgSrc}" style="width: 32px; height: 32px; border-radius: 50%; object-fit: cover; border: 1px solid var(--border-color); flex-shrink: 0; margin-top: 2px;">
             <div style="display: flex; flex-direction: column; width: 100%;">
@@ -43,18 +47,28 @@ document.getElementById('chat-send-btn')?.addEventListener('click', () => {
     if (!text) return;
     
     if (chatInput) chatInput.value = ''; 
-    const name = document.getElementById('display-username')?.textContent || 'You';
-    const myAvatar = localStorage.getItem('appAvatar') || window.defaultAvatar;
+    const name = document.getElementById('display-username')?.textContent || localStorage.getItem('appUsername') || 'You';
+    const myAvatar = localStorage.getItem('appAvatar') || window.defaultAvatar || './Banaya.png';
     
     window.addChatLine(name, text, 'normal', myAvatar); 
+    if (window.playUiSound) window.playUiSound('chat_out');
+
     if (window.socket && window.socket.readyState === WebSocket.OPEN) {
-        window.socket.send(JSON.stringify({ action: 'chat_message', userId: window.myId, username: name, text: text, avatar: myAvatar }));
+        // IMPORTANTE: Não envia o Base64 gigante do avatar em cada mensagem de chat
+        // para nunca ultrapassar o limite de frame dos brokers MQTT!
+        window.socket.send(JSON.stringify({
+            action: 'chat_message',
+            userId: window.myId,
+            username: name,
+            text: text,
+            ts: Date.now()
+        }));
     }
 });
 
 document.getElementById('chat-input')?.addEventListener('keypress', (e) => { 
     if (e.key === 'Enter') {
         e.preventDefault();
-        document.getElementById('chat-send-btn').click(); 
+        document.getElementById('chat-send-btn')?.click(); 
     }
 });

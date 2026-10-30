@@ -808,9 +808,9 @@ window.cropperClickHandler = (e) => {
             const drawY = 100 - (h * window.cropScale) / 2 + (window.imgY - (200 - h) / 2);
 
             ctx.drawImage(img, drawX, drawY, w * window.cropScale, h * window.cropScale); ctx.restore();
-            const croppedDataUrl = canvas.toDataURL('image/png');
+            const croppedDataUrl = canvas.toDataURL('image/webp', 0.8);
             
-            if (window.cropMode === 'avatar') {
+            if (window.cropMode === 'avatar') { 
                 const prev = document.getElementById('config-avatar-preview'); if(prev) prev.src = croppedDataUrl; 
                 const ua = document.getElementById('user-avatar'); if(ua) ua.src = croppedDataUrl;
                 localStorage.setItem('appAvatar', croppedDataUrl);

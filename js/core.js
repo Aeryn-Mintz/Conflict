@@ -1,5 +1,6 @@
 // ==========================================
 // CENTRAL NETWORK & STATE ROUTER (core.js)
+// Otimizado: Sem AudioContext no Startup e Sem WebRTC Ocioso
 // ==========================================
 
 if (typeof require !== 'undefined') { window.ipcRenderer = require('electron').ipcRenderer; }
@@ -27,76 +28,8 @@ if (window.ipcRenderer) {
         }
     }).catch(() => {});
 }
-// ==========================================
-// POLYPHONIC MIDI / SYNTH UI SOUND ENGINE
-// ==========================================
-window.playUiSound = function(type) {
-    try {
-        const AudioContextClass = window.AudioContext || window.webkitAudioContext;
-        if (!window.uiAudioCtx) window.uiAudioCtx = new AudioContextClass();
-        const ctx = window.uiAudioCtx;
-        if (ctx.state === 'suspended') ctx.resume();
 
-        const playNote = (freq, startOffset, duration, vol = 0.08, wave = 'sine') => {
-            const now = ctx.currentTime + startOffset;
-            const osc = ctx.createOscillator();
-            const sub = ctx.createOscillator();
-            const gain = ctx.createGain();
-
-            osc.type = wave;
-            osc.frequency.setValueAtTime(freq, now);
-
-            // Soft harmonic overtone for warm MIDI bell texture
-            sub.type = 'triangle';
-            sub.frequency.setValueAtTime(freq * 2, now);
-
-            gain.gain.setValueAtTime(0.0001, now);
-            gain.gain.linearRampToValueAtTime(vol, now + 0.012);
-            gain.gain.exponentialRampToValueAtTime(0.0001, now + duration);
-
-            const subGain = ctx.createGain();
-            subGain.gain.setValueAtTime(vol * 0.25, now);
-            subGain.gain.exponentialRampToValueAtTime(0.0001, now + duration * 0.7);
-
-            osc.connect(gain);
-            sub.connect(subGain);
-            subGain.connect(gain);
-            gain.connect(ctx.destination);
-
-            osc.start(now);
-            sub.start(now);
-            osc.stop(now + duration + 0.02);
-            sub.stop(now + duration + 0.02);
-        };
-
-        if (type === 'join_call') {
-            // Ascending Discord-style warm major 9th arpeggio (F4 -> A4 -> C5 -> G5)
-            playNote(349.23, 0.00, 0.22, 0.09, 'sine');
-            playNote(440.00, 0.06, 0.22, 0.09, 'sine');
-            playNote(523.25, 0.12, 0.26, 0.10, 'sine');
-            playNote(783.99, 0.18, 0.38, 0.08, 'sine');
-        } else if (type === 'leave_call') {
-            // Descending warm chime (E5 -> C5 -> G4)
-            playNote(659.25, 0.00, 0.18, 0.08, 'sine');
-            playNote(523.25, 0.07, 0.18, 0.08, 'sine');
-            playNote(392.00, 0.14, 0.32, 0.09, 'sine');
-        } else if (type === 'chat_in') {
-            // Crisp crystalline notification pluck (A5 -> E6)
-            playNote(880.00, 0.00, 0.12, 0.06, 'sine');
-            playNote(1318.51, 0.045, 0.22, 0.07, 'sine');
-        } else if (type === 'chat_out') {
-            // Subtle tactile send pop (E5)
-            playNote(659.25, 0.00, 0.09, 0.04, 'sine');
-        } else if (type === 'peer_join') {
-            // Soft radar presence chime (D5 -> A5)
-            playNote(587.33, 0.00, 0.18, 0.06, 'sine');
-            playNote(880.00, 0.08, 0.28, 0.06, 'sine');
-        }
-    } catch (e) {}
-};
-
-
-// 2. WEBSOCKET ROUTER (NETWORK)
+// 1. WEBSOCKET ROUTER (NETWORK)
 let serverUrl = localStorage.getItem('conflictServerUrl');
 
 if (!serverUrl) {
@@ -108,12 +41,18 @@ window.socket = new WebSocket(serverUrl);
 window.hasAnnouncedJoin = false;
 window.presenceHeartbeat = null;
 
-window.sendJoinPacket = function() {
+window._lastJoinSentAt = 0;
+window._networkEnsuredOnce = false;
+
+window.sendJoinPacket = function(force = false) {
     if (!window.socket || window.socket.readyState !== WebSocket.OPEN) return;
+    const now = Date.now();
+    if (!force && now - window._lastJoinSentAt < 1200) return;
+    window._lastJoinSentAt = now;
+
     const username = document.getElementById('display-username')?.textContent || localStorage.getItem('appUsername') || 'User';
     const activeNet = JSON.parse(localStorage.getItem('conflictActiveNetwork') || '{}');
 
-    // Pacote leve (< 200 bytes) para atravessar qualquer broker MQTT instantaneamente!
     window.socket.send(JSON.stringify({
         action: 'join',
         userId: window.myId,
@@ -121,37 +60,50 @@ window.sendJoinPacket = function() {
         virtualIp: window.myVirtualIp,
         inCall: window.inVoiceCall,
         roomCode: activeNet.code || 'DEFAULT',
-        ts: Date.now()
+        roomName: activeNet.name || `Network #${activeNet.code || 'DEFAULT'}`,
+        ts: now
     }));
 };
 
 window.announceRoomJoin = async function() {
     if (!window.socket || window.socket.readyState !== WebSocket.OPEN) return;
 
-    const activeNet = JSON.parse(localStorage.getItem('conflictActiveNetwork') || '{"code":"DEFAULT","name":"Network"}');
+    let activeNet = JSON.parse(localStorage.getItem('conflictActiveNetwork') || '{"code":"DEFAULT","name":"Network"}');
+    if (activeNet.name && activeNet.name.includes('|')) {
+        const parts = activeNet.name.split('|');
+        activeNet.name = parts[0].trim();
+        if (parts[1] && (!activeNet.code || activeNet.code === 'DEFAULT')) {
+            activeNet.code = parts[1].trim().toUpperCase();
+        }
+        localStorage.setItem('conflictActiveNetwork', JSON.stringify(activeNet));
+    }
+
     const username = document.getElementById('display-username')?.textContent || localStorage.getItem('appUsername') || 'User';
 
-    if (window.ipcRenderer) {
+    // IMPORTANTE: Só invoca ensure-network UMA vez por sessão para nunca criar loop infinito com room_ready!
+    if (window.ipcRenderer && !window._networkEnsuredOnce) {
+        window._networkEnsuredOnce = true;
         try {
             const res = await window.ipcRenderer.invoke('ensure-network', {
                 roomCode: activeNet.code || 'DEFAULT',
                 roomName: activeNet.name || `Network #${activeNet.code}`,
-                hostName: username
+                hostName: username,
+                userId: window.myId
             });
             if (res && res.virtualIp) window.myVirtualIp = res.virtualIp;
         } catch (e) {}
     }
 
-    window.sendJoinPacket();
+    window.sendJoinPacket(true);
 
     if (!window.hasAnnouncedJoin) {
         window.hasAnnouncedJoin = true;
+        setTimeout(() => window.sendJoinPacket(true), 2000);
         if (window.addChatLine) {
             window.addChatLine('System', `🌐 Connected to Network **${activeNet.name || activeNet.code || 'LAN'}** (Your Static LAN IP: ${window.myVirtualIp}).`, 'system');
         }
         if (window.renderConnectedUsers) window.renderConnectedUsers();
 
-        // Repete o sinal de presença a cada 4 segundos para sincronizar amigos que entraram juntos
         if (window.presenceHeartbeat) clearInterval(window.presenceHeartbeat);
         window.presenceHeartbeat = setInterval(() => {
             if (window.socket && window.socket.readyState === WebSocket.OPEN) {
@@ -166,7 +118,7 @@ window.announceRoomJoin = async function() {
                     ts: Date.now()
                 }));
             }
-        }, 4000);
+        }, 8000);
     }
 };
 
@@ -183,6 +135,7 @@ window.socket.onopen = () => {
 window.socket.onerror = () => {
     if (window.addChatLine) window.addChatLine('System', '⚠️ Could not connect to signaling server. Features requiring network routing may fail.', 'system');
 };
+
 window.socket.onmessage = async (event) => {
     let data;
     try { data = JSON.parse(event.data); } catch (e) { return; }
@@ -192,27 +145,52 @@ window.socket.onmessage = async (event) => {
         return;
     }
 
-    if (data.action === 'room_ready') {
-        window.announceRoomJoin();
+    if (data.action === 'audio_ack' && data.targetId === window.myId) {
+        if (window._peerAckedAudio) window._peerAckedAudio[data.userId] = true;
         return;
     }
 
-if (data.action === 'call_state' && data.userId !== window.myId) {
-        const wasInCall = !!window.peerInCall[data.userId];
-        window.peerInCall[data.userId] = !!data.inCall;
-        if (wasInCall !== !!data.inCall && window.playUiSound) {
-            window.playUiSound(data.inCall ? 'join_call' : 'leave_call');
-        }
-        if (!data.inCall) {
+    if (data.action === 'video_ack' && data.targetId === window.myId) {
+        if (window._peerAckedVideo) window._peerAckedVideo[data.userId] = true;
+        return;
+    }
+
+    if ((data.action === 'screen_frame' || data.action === 'screen_stop') && data.userId !== window.myId) {
+        if (window.handleScreenFrame) window.handleScreenFrame(data);
+        if (data.action === 'screen_stop') {
             document.querySelectorAll(`.stream-${data.userId}`).forEach(el => {
-                if (el.id && el.id.startsWith('video-container-')) el.remove();
+                if (el.id && (el.id.startsWith('video-container-') || el.id.startsWith('bridge-screen-container-'))) el.remove();
             });
         }
-        if (window.renderConnectedUsers) window.renderConnectedUsers();
-        if (window.addChatLine) {
-            const pName = window.peerNames[data.userId] || 'A friend';
-            window.addChatLine('System', data.inCall ? `🎙️ **${pName}** joined the Voice Channel.` : `📴 **${pName}** left the Voice Channel.`, 'system');
+        return;
+    }
+
+    if (data.action === 'room_ready') {
+        window.sendJoinPacket(false);
+        return;
+    }
+
+    if (data.action === 'call_state' && data.userId !== window.myId) {
+        const wasInCall = !!window.peerInCall[data.userId];
+        const nowInCall = !!data.inCall;
+        window.peerInCall[data.userId] = nowInCall;
+
+        if (!nowInCall) {
+            if (window._peerAckedAudio) window._peerAckedAudio[data.userId] = false;
+            document.querySelectorAll(`.stream-${data.userId}`).forEach(el => {
+                if (el.id && (el.id.startsWith('video-container-') || el.id.startsWith('bridge-screen-container-'))) el.remove();
+            });
         }
+
+        // Só toca o som e mostra mensagem no chat se o estado realmente mudou!
+        if (wasInCall !== nowInCall) {
+            if (window.playUiSound) window.playUiSound(nowInCall ? 'join_call' : 'leave_call');
+            if (window.addChatLine) {
+                const pName = window.peerNames[data.userId] || 'A friend';
+                window.addChatLine('System', nowInCall ? `🎙️ **${pName}** joined the Voice Channel.` : `📴 **${pName}** left the Voice Channel.`, 'system');
+            }
+        }
+        if (window.renderConnectedUsers) window.renderConnectedUsers();
         return;
     }
     
@@ -221,9 +199,10 @@ if (data.action === 'call_state' && data.userId !== window.myId) {
         window.peerNames[data.userId] = data.username || "Guest";
         window.peerAvatars[data.userId] = data.avatar || window.defaultAvatar;
         if (data.virtualIp) window.peerIps[data.userId] = data.virtualIp;
-        if (data.inCall !== undefined) window.peerInCall[data.userId] = !!data.inCall;
+        // Nunca deixa um pacote de join/presence atrasado derrubar quem já está em call (apenas call_state desliga a call!)
+        if (data.inCall === true) window.peerInCall[data.userId] = true;
+        else if (window.peerInCall[data.userId] === undefined) window.peerInCall[data.userId] = false;
         if (isFirstSeen && window.playUiSound) window.playUiSound('peer_join');
-        if (window.createPeerConnection && !window.peers[data.userId]) window.createPeerConnection(data.userId);
         if (window.renderConnectedUsers) window.renderConnectedUsers();
         
         window.socket.send(JSON.stringify({
@@ -232,11 +211,11 @@ if (data.action === 'call_state' && data.userId !== window.myId) {
             userId: window.myId,
             username: document.getElementById('display-username')?.textContent || localStorage.getItem('appUsername') || 'Guest',
             virtualIp: window.myVirtualIp,
-            inCall: window.inVoiceCall
+            inCall: window.inVoiceCall,
+            ts: Date.now()
         }));
 
-        // Sync YouTube queue, current video, and exact timestamp to ANY new user who joins!
-        if (window.ytQueue && window.ytQueue.length > 0 && window.sendFullYtSync) {
+        if (isFirstSeen && window.ytQueue && window.ytQueue.length > 0 && window.sendFullYtSync) {
             window.sendFullYtSync(data.userId);
         }
         
@@ -247,15 +226,20 @@ if (data.action === 'call_state' && data.userId !== window.myId) {
     }
     else if (data.action === 'presence' && (!data.targetId || data.targetId === window.myId)) {
         if (data.userId === window.myId) return;
+        const changed = window.peerNames[data.userId] !== (data.username || "Guest") ||
+                        window.peerIps[data.userId] !== data.virtualIp ||
+                        window.peerInCall[data.userId] !== !!data.inCall;
+
         window.peerNames[data.userId] = data.username || "Guest";
         window.peerAvatars[data.userId] = data.avatar || window.defaultAvatar;
         if (data.virtualIp) window.peerIps[data.userId] = data.virtualIp;
-        if (data.inCall !== undefined) window.peerInCall[data.userId] = !!data.inCall;
-        if (window.createPeerConnection && !window.peers[data.userId]) window.createPeerConnection(data.userId);
-        if (window.renderConnectedUsers) window.renderConnectedUsers();
+        // Nunca deixa um pacote de join/presence atrasado derrubar quem já está em call (apenas call_state desliga a call!)
+        if (data.inCall === true) window.peerInCall[data.userId] = true;
+        else if (window.peerInCall[data.userId] === undefined) window.peerInCall[data.userId] = false;
+        if (changed && window.renderConnectedUsers) window.renderConnectedUsers();
     }
 
-    if (['offer', 'answer', 'ice-candidate', 'join', 'presence'].includes(data.action)) {
+    if (['offer', 'answer', 'ice-candidate', 'ice-candidates', 'join', 'presence'].includes(data.action)) {
         if (window.handleWebRTCSignal) window.handleWebRTCSignal(data);
     }
 
@@ -270,7 +254,7 @@ if (data.action === 'call_state' && data.userId !== window.myId) {
     else if (data.action === 'claim_dm') { if(window.addChatLine) window.addChatLine('System', `👑 ${data.username} is now the Dungeon Master.`, 'system'); const dmBtn = document.getElementById('claim-dm-btn'); if (data.userId !== window.myId && dmBtn) { dmBtn.innerText = `👑 DM: ${data.username}`; dmBtn.disabled = true; dmBtn.style.borderColor = "var(--border-color)"; dmBtn.style.color = "var(--text-muted)"; } }
     else if (data.action === 'release_dm') { if(window.addChatLine) window.addChatLine('System', `👑 The Dungeon Master role is now open.`, 'system'); const dmBtn = document.getElementById('claim-dm-btn'); if(dmBtn) { dmBtn.innerText = `👑 Claim DM`; dmBtn.disabled = false; dmBtn.style.borderColor = "#fbbf24"; dmBtn.style.color = "#fbbf24"; } }
     
-else if (data.action === 'chat_message') {
+    else if (data.action === 'chat_message') {
         if (data.userId !== window.myId && window.playUiSound) window.playUiSound('chat_in');
         if (window.addChatLine) window.addChatLine(data.username || 'Guest', data.text || '', data.type || 'normal', data.avatar || window.peerAvatars[data.userId]);
     }
@@ -294,10 +278,10 @@ else if (data.action === 'chat_message') {
     else if (data.action === 'tokens_clear' && data.userId !== window.myId) { document.getElementById('token-layer').innerHTML = ''; if (window.mapAssets) window.mapAssets = {}; }
     else if (data.action === 'token_remove' && data.userId !== window.myId) { const el = document.getElementById('map-token-' + data.tokenId); if (el) el.remove(); if(window.mapAssets) delete window.mapAssets[data.tokenId]; }
     else if (data.action === 'canvas_draw' && data.userId !== window.myId && window.remoteDraw) window.remoteDraw(data);
-    else if (data.action === 'canvas_clear' && data.userId !== window.myId && window.ctx) window.ctx.clearRect(0, 0, 8000, 8000);
+    else if (data.action === 'canvas_clear' && data.userId !== window.myId && window.ctx) window.ctx.clearRect(0, 0, window.mapWidth || 2400, window.mapHeight || 1600);
     
-else if (data.action === 'yt_request_sync' && data.userId !== window.myId) {
-        if (window.ytQueue && window.ytQueue.length > 0 && window.sendFullYtSync) {
+    else if (data.action === 'yt_request_sync' && data.userId !== window.myId) {
+        if (isFirstSeen && window.ytQueue && window.ytQueue.length > 0 && window.sendFullYtSync) {
             window.sendFullYtSync(data.userId);
         }
     }
@@ -338,7 +322,7 @@ else if (data.action === 'yt_request_sync' && data.userId !== window.myId) {
     }
 };
 
-// 3. UI, SETTINGS & NETWORK SWITCHER ENGINE
+// 2. UI, SETTINGS & NETWORK SWITCHER ENGINE
 window.makeDraggable = function(el) {
     const handle = el.querySelector('.drag-handle'); if (!handle) return;
     let isDragging = false, startX, startY, initialX, initialY;
@@ -413,7 +397,6 @@ window.renderConnectedUsers = function() {
         listEl.appendChild(row);
     });
 
-    // Update the Voice Channel Lobby banner inside Live Stage so users know who is waiting in the call
     let lobbyBanner = document.getElementById('call-lobby-banner');
     const actionRow = document.querySelector('#video-grid .action-row');
     if (actionRow && !lobbyBanner) {
@@ -441,7 +424,7 @@ window.buildSidebarNetworkSwitcher = function() {
     const netSection = document.createElement('div');
     netSection.id = 'network-switcher-box';
     netSection.className = 'sidebar-section';
-    netSection.style.cssText = 'border-bottom: 1px solid var(--border-color); padding-bottom: 12px; margin-bottom: 10px; transition: opacity 0.2s, filter 0.2s;';
+    netSection.style.cssText = 'border-bottom: 1px solid var(--border-color); padding-bottom: 12px; margin-bottom: 10px; transition: opacity 0.2s;';
 
     let optionsHtml = '';
     savedNets.forEach(n => {
@@ -516,7 +499,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
     async function loadDevices() {
         try {
-            // Lista os dispositivos diretamente sem sequestrar o driver de áudio/vídeo!
             const devices = await navigator.mediaDevices.enumerateDevices();
             const audioIn  = document.getElementById('audio-in-select');
             const audioOut = document.getElementById('audio-out-select');
@@ -528,7 +510,7 @@ document.addEventListener('DOMContentLoaded', () => {
             devices.forEach(device => {
                 const opt = document.createElement('option');
                 opt.value = device.deviceId;
-                opt.text = device.label || `${device.kind} (${device.deviceId.slice(0,5) || 'unknown'}…)`;
+                opt.text = device.label || `${device.kind} (${device.deviceId.slice(0,5) || 'default'}…)`;
                 if (device.kind === 'audioinput' && audioIn)  audioIn.appendChild(opt);
                 else if (device.kind === 'audiooutput' && audioOut) audioOut.appendChild(opt);
                 else if (device.kind === 'videoinput' && videoIn)   videoIn.appendChild(opt);
@@ -577,7 +559,6 @@ document.addEventListener('DOMContentLoaded', () => {
                     targetId: null,
                     userId: window.myId,
                     username: newName,
-                    avatar: localStorage.getItem('appAvatar'),
                     virtualIp: window.myVirtualIp,
                     inCall: window.inVoiceCall
                 }));
@@ -600,7 +581,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const accent = document.getElementById('color-accent')?.value || '#10b981';
         
         let r = parseInt(panel.slice(1, 3), 16), g = parseInt(panel.slice(3, 5), 16), b = parseInt(panel.slice(5, 7), 16);
-        const glassPanel = `rgba(${r || 10}, ${g || 20}, ${b || 12}, 0.65)`;
+        const glassPanel = `rgba(${r || 10}, ${g || 20}, ${b || 12}, 0.92)`;
 
         document.documentElement.style.setProperty('--bg-color', bg); 
         document.documentElement.style.setProperty('--panel-bg', glassPanel); 
@@ -629,10 +610,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 try {
                     const oldCamTrack = window.localCamStream.getVideoTracks()[0];
                     const newCam = await navigator.mediaDevices.getUserMedia({
-                        video: { deviceId: { exact: videoIn } }
-                    }).catch(() => navigator.mediaDevices.getUserMedia({
                         video: { deviceId: { ideal: videoIn } }
-                    }));
+                    });
                     const newTrack = newCam.getVideoTracks()[0];
                     Object.values(window.peers).forEach(pc => {
                         const sender = pc.getSenders().find(s => s.track === oldCamTrack);
@@ -655,7 +634,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     document.getElementById('reset-theme-btn')?.addEventListener('click', () => {
         document.documentElement.style.setProperty('--bg-color', '#050a06'); 
-        document.documentElement.style.setProperty('--panel-bg', 'rgba(10, 20, 12, 0.65)'); 
+        document.documentElement.style.setProperty('--panel-bg', 'rgba(10, 20, 12, 0.92)'); 
         document.documentElement.style.setProperty('--text-main', '#e2e8f0'); 
         document.documentElement.style.setProperty('--accent-main', '#10b981');
         localStorage.removeItem('themeBg'); 
@@ -700,8 +679,11 @@ document.addEventListener('DOMContentLoaded', () => {
         const uvName = document.getElementById('uv-name');
         if (uvName) uvName.innerText = `${window.peerNames[activeVolUid]}: ${Math.round(vol * 100)}%`;
 
-        if (window.remoteGainNodes && window.remoteGainNodes[activeVolUid]) {
+        if (window.remoteGainNodes && window.remoteGainNodes[activeVolUid] && window.audioCtx) {
             window.remoteGainNodes[activeVolUid].gain.setTargetAtTime(vol, window.audioCtx.currentTime, 0.01);
+        }
+        if (window.remoteAudioEls && window.remoteAudioEls[activeVolUid]) {
+            window.remoteAudioEls[activeVolUid].volume = Math.min(1.0, vol);
         }
 
         let hiddenInput = document.getElementById(`vol-${activeVolUid}`);
@@ -723,10 +705,7 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     document.getElementById('leave-room-btn')?.addEventListener('click', () => { 
-        if (confirm('Disconnect from this network and return to Network Hub?')) {
-            if (window.ipcRenderer) window.ipcRenderer.send('leave-virtual-lan');
-            window.location.href = 'index.html'; 
-        }
+        window.location.href = 'index.html'; 
     });
 
     const savedName = localStorage.getItem('appUsername'); 
@@ -755,7 +734,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const aInp = document.getElementById('color-accent'); if(aInp) aInp.value = savedAccent;
 
     let pr = parseInt(savedPanel.slice(1, 3), 16), pg = parseInt(savedPanel.slice(3, 5), 16), pb = parseInt(savedPanel.slice(5, 7), 16);
-    const glassPanelInit = `rgba(${pr || 10}, ${pg || 20}, ${pb || 12}, 0.65)`;
+    const glassPanelInit = `rgba(${pr || 10}, ${pg || 20}, ${pb || 12}, 0.92)`;
 
     document.documentElement.style.setProperty('--bg-color', savedBg);
     document.documentElement.style.setProperty('--panel-bg', glassPanelInit);

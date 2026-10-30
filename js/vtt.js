@@ -8,7 +8,7 @@ window.cameraX = 0; window.cameraY = 0;
 window.currentZoom = 1.0; 
 window.currentTool = 'selector'; 
 window.strokeColor = '#10b981'; window.strokeWidth = 2;
-window.mapWidth = 8000; window.mapHeight = 8000;
+window.mapWidth = 2000; window.mapHeight = 1400;
 
 window.mapAssets = {};
 window.activeMapBg = null;
@@ -20,11 +20,47 @@ window.selectionStartX = 0; window.selectionStartY = 0;
 window.selectionBoxEl = null;
 window.dragOffsets = new Map();
 
+window.saveMapDebounce = null;
 window.saveMapState = function() {
     if (window.isDM && window.fs && window.mapSavePath) {
-        const state = { img: window.activeMapBg, w: window.mapWidth, h: window.mapHeight, assets: window.mapAssets };
-        try { window.fs.writeFileSync(window.mapSavePath, JSON.stringify(state), 'utf-8'); } catch(e){}
+        clearTimeout(window.saveMapDebounce);
+        window.saveMapDebounce = setTimeout(() => {
+            const state = { img: window.activeMapBg, w: window.mapWidth, h: window.mapHeight, assets: window.mapAssets };
+            try {
+                window.fs.writeFile(window.mapSavePath, JSON.stringify(state), 'utf-8', () => {});
+            } catch(e){}
+        }, 800);
     }
+};
+
+// Comprime mapas e tokens automaticamente na GPU via Canvas antes de converter para Base64
+// Evita que imagens de 5MB-10MB travem o Electron ("Não Respondendo") ou derrubem o WebSocket/MQTT!
+window.compressImageFile = function(file, maxDim = 1600, mime = 'image/jpeg', quality = 0.75) {
+    return new Promise((resolve) => {
+        const url = URL.createObjectURL(file);
+        const img = new Image();
+        img.onload = () => {
+            URL.revokeObjectURL(url);
+            let w = img.naturalWidth || img.width;
+            let h = img.naturalHeight || img.height;
+            if (w > maxDim || h > maxDim) {
+                const scale = maxDim / Math.max(w, h);
+                w = Math.round(w * scale);
+                h = Math.round(h * scale);
+            }
+            const c = document.createElement('canvas');
+            c.width = w;
+            c.height = h;
+            const ctx = c.getContext('2d');
+            ctx.drawImage(img, 0, 0, w, h);
+            resolve({ dataUrl: c.toDataURL(mime, quality), width: w, height: h });
+        };
+        img.onerror = () => {
+            URL.revokeObjectURL(url);
+            resolve(null);
+        };
+        img.src = url;
+    });
 };
 
 window.applyVisibility = function(el, isHidden) {
@@ -51,7 +87,7 @@ window.updateCamera = function() {
     if (maxH < viewH) window.cameraY = (viewH - maxH) / 2;
     else window.cameraY = Math.max(viewH - maxH, Math.min(0, window.cameraY));
 
-    mapLayer.style.willChange = 'transform';
+    // willChange removido para economizar 150MB de VRAM enquanto ocioso
     mapLayer.style.transform = `translate(${window.cameraX}px, ${window.cameraY}px) scale(${window.currentZoom})`;
     mapLayer.style.transformOrigin = "0 0";
 };
@@ -98,8 +134,14 @@ window.vttMousemoveHandler = (e) => {
     if (window.isDrawing) {
         const [currentX, currentY] = getMousePosition(e);
         if (!window.ctx) return;
+        const dist = Math.hypot(currentX - window.lastX, currentY - window.lastY);
+        if (dist < 2.5) return;
         window.ctx.beginPath(); window.ctx.moveTo(window.lastX, window.lastY); window.ctx.lineTo(currentX, currentY); window.ctx.strokeStyle = window.strokeColor; window.ctx.lineWidth = window.strokeWidth; window.ctx.stroke();
-        if (window.socket && window.socket.readyState === WebSocket.OPEN) window.socket.send(JSON.stringify({ action: 'canvas_draw', userId: window.myId, x0: window.lastX, y0: window.lastY, x1: currentX, y1: currentY, color: window.strokeColor, width: window.strokeWidth }));
+        const now = Date.now();
+        if (now - (window._lastDrawNetTime || 0) > 25) {
+            if (window.socket && window.socket.readyState === WebSocket.OPEN) window.socket.send(JSON.stringify({ action: 'canvas_draw', userId: window.myId, x0: window.lastX, y0: window.lastY, x1: currentX, y1: currentY, color: window.strokeColor, width: window.strokeWidth }));
+            window._lastDrawNetTime = now;
+        }
         [window.lastX, window.lastY] = [currentX, currentY];
         return;
     }
@@ -382,7 +424,7 @@ window.initCanvas = function() {
         const mapLayer = document.getElementById('vtt-map-layer');
         if (mapLayer) {
             mapLayer.style.width = window.mapWidth + 'px'; mapLayer.style.height = window.mapHeight + 'px';
-            mapLayer.addEventListener('mousedown', startDrawing); mapLayer.addEventListener('mousemove', draw);
+            mapLayer.addEventListener('mousedown', startDrawing);
             mapLayer.addEventListener('mouseup', stopDrawing); mapLayer.addEventListener('mouseout', stopDrawing);
         }
         window.addEventListener('resize', window.updateCamera);
@@ -514,29 +556,25 @@ window.vttChangeHandler = (e) => {
     if (e.target.id === 'stroke-width') { window.strokeWidth = parseInt(e.target.value); if (window.ctx) { window.ctx.lineWidth = window.strokeWidth; window.ctx.lineCap = 'round'; window.ctx.lineJoin = 'round'; } }
     if (e.target.id === 'map-file-input') {
         const file = e.target.files[0]; if (!file) return;
-        const reader = new FileReader();
-        reader.onload = (event) => {
-            const bgData = event.target.result; const img = new Image();
-            img.onload = () => {
-                if (window.setMapBackground) window.setMapBackground(bgData, img.width, img.height);
-                if (window.socket && window.socket.readyState === WebSocket.OPEN) window.socket.send(JSON.stringify({action: 'set_map_bg', image: bgData, w: img.width, h: img.height}));
-            };
-            img.src = bgData;
-        };
-        reader.readAsDataURL(file);
+        window.compressImageFile(file, 1600, 'image/jpeg', 0.72).then(res => {
+            if (!res) return;
+            if (window.setMapBackground) window.setMapBackground(res.dataUrl, res.width, res.height);
+            if (window.socket && window.socket.readyState === WebSocket.OPEN) {
+                window.socket.send(JSON.stringify({action: 'set_map_bg', image: res.dataUrl, w: res.width, h: res.height}));
+            }
+        });
     }
     if (e.target.id === 'token-upload') {
         const file = e.target.files[0]; if (!file) return;
-        const reader = new FileReader();
-        reader.onload = (ev) => {
-            const asset = { id: window.myId + '-' + Math.random().toString(36).substring(2, 9), name: file.name.split('.')[0], src: ev.target.result, type: 'token', ownerId: window.myId };
+        window.compressImageFile(file, 220, 'image/webp', 0.82).then(res => {
+            if (!res) return;
+            const asset = { id: window.myId + '-' + Math.random().toString(36).substring(2, 9), name: file.name.split('.')[0], src: res.dataUrl, type: 'token', ownerId: window.myId };
             const tokenLibrary = document.getElementById('token-library'); if (!tokenLibrary) return;
             const tokenEl = document.createElement('div'); tokenEl.className = 'token-item';
             tokenEl.innerHTML = `<img src="${asset.src}" alt="${asset.name}" class="token-preview"><div class="token-name">${asset.name}</div>`;
             tokenEl.onclick = () => window.placeTokenOnMap(asset, true);
             tokenLibrary.appendChild(tokenEl);
-        };
-        reader.readAsDataURL(file);
+        });
     }
 };
 document.addEventListener('change', window.vttChangeHandler);
@@ -603,10 +641,7 @@ window.vttClickHandler = (e) => {
 };
 document.addEventListener('click', window.vttClickHandler);
 
-// INICIALIZAÇÃO AUTOMÁTICA DO TABULEIRO
-document.addEventListener('DOMContentLoaded', () => {
-    setTimeout(() => { if (window.initCanvas) window.initCanvas(); }, 500);
-});
+// LAZY-INIT: O tabuleiro VTT só aloca memória quando o usuário abre a aba RPG Tabletop
 
 // TRAVA DE SEGURANÇA: RECALCULAR AO CLICAR NA ABA
 document.addEventListener('click', (e) => {

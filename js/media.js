@@ -1,5 +1,6 @@
 // ==========================================
-// EXTERNAL MEDIA ENGINE (Real-Time Synced YouTube & Soundboard)
+// EXTERNAL MEDIA ENGINE (js/media.js)
+// Anti-Loop Synced YouTube Jukebox & Soundboard
 // ==========================================
 
 window.ytPlayer = null;
@@ -7,9 +8,8 @@ window.ytPlayerReady = false;
 window.pendingYtSync = null;
 window.ytQueue = [];
 window.currentQueueIndex = -1;
-window._ytApplyingRemote = false;
-window._ytLastKnownTime = 0;
-window._ytLastState = -1;
+window._ytIgnoreEventsUntil = 0;
+window._ytLastSyncSentPerPeer = {};
 
 function extractYouTubeId(url) {
     if (!url) return null;
@@ -34,6 +34,14 @@ function formatYtTime(sec) {
     const m = Math.floor(sec / 60);
     const s = Math.floor(sec % 60);
     return `${m}:${s < 10 ? '0' : ''}${s}`;
+}
+
+function lockRemoteYtEvents(durationMs = 2400) {
+    window._ytIgnoreEventsUntil = Math.max(window._ytIgnoreEventsUntil || 0, Date.now() + durationMs);
+}
+
+function isRemoteYtLocked() {
+    return Date.now() < (window._ytIgnoreEventsUntil || 0);
 }
 
 window.injectYtSyncBar = function() {
@@ -65,10 +73,8 @@ window.injectYtSyncBar = function() {
         const duration = window.ytPlayer.getDuration();
         if (duration > 0) {
             const targetTime = (parseFloat(e.target.value) / 100) * duration;
-            window._ytApplyingRemote = true;
+            lockRemoteYtEvents(1800);
             window.ytPlayer.seekTo(targetTime, true);
-            window._ytLastKnownTime = targetTime;
-            setTimeout(() => { window._ytApplyingRemote = false; }, 350);
             window.broadcastYtState('seek', targetTime);
         }
     });
@@ -76,7 +82,11 @@ window.injectYtSyncBar = function() {
 
 window.broadcastYtState = function(stateType, customTime = null) {
     if (!window.socket || window.socket.readyState !== WebSocket.OPEN) return;
+    if (isRemoteYtLocked() && stateType !== 'seek') return;
+
     const currentItem = window.ytQueue[window.currentQueueIndex];
+    if (!currentItem) return;
+
     const curTime = customTime !== null
         ? customTime
         : (window.ytPlayer && typeof window.ytPlayer.getCurrentTime === 'function' ? window.ytPlayer.getCurrentTime() : 0);
@@ -85,7 +95,7 @@ window.broadcastYtState = function(stateType, customTime = null) {
         action: 'yt_state',
         userId: window.myId,
         state: stateType,
-        videoId: currentItem ? currentItem.id : null,
+        videoId: currentItem.id,
         index: window.currentQueueIndex,
         currentTime: curTime,
         sentAt: Date.now()
@@ -95,6 +105,13 @@ window.broadcastYtState = function(stateType, customTime = null) {
 window.sendFullYtSync = function(targetUserId = null) {
     if (!window.socket || window.socket.readyState !== WebSocket.OPEN) return;
     if (!window.ytQueue || window.ytQueue.length === 0) return;
+
+    // Rate-limit: impede enviar múltiplos yt_sync seguidos para o mesmo usuário quando ele entra na sala
+    if (targetUserId) {
+        const lastSent = window._ytLastSyncSentPerPeer[targetUserId] || 0;
+        if (Date.now() - lastSent < 4000) return;
+        window._ytLastSyncSentPerPeer[targetUserId] = Date.now();
+    }
 
     const pState = (window.ytPlayer && typeof window.ytPlayer.getPlayerState === 'function')
         ? window.ytPlayer.getPlayerState()
@@ -116,7 +133,7 @@ window.sendFullYtSync = function(targetUserId = null) {
 };
 
 window.applyIncomingYtSync = function(data) {
-    if (!data || !Array.isArray(data.queue)) return;
+    if (!data || !Array.isArray(data.queue) || data.queue.length === 0) return;
     window.ytQueue = data.queue;
     window.currentQueueIndex = typeof data.index === 'number' ? data.index : 0;
     window.renderQueueUI();
@@ -132,17 +149,28 @@ window.applyIncomingYtSync = function(data) {
         return;
     }
 
+    // Trava eventos locais por 2.8s para NUNCA criar loop infinito de play/pause/seek com o host!
+    lockRemoteYtEvents(2800);
     document.getElementById('yt-wrapper').style.display = 'block';
-    window._ytApplyingRemote = true;
-    window.ytPlayer.loadVideoById({ videoId: targetVideoId, startSeconds: targetTime });
 
-    setTimeout(() => {
-        if (window.ytPlayer && typeof window.ytPlayer.pauseVideo === 'function') {
-            if (data.isPlaying) window.ytPlayer.playVideo();
-            else window.ytPlayer.pauseVideo();
+    const loadedId = (typeof window.ytPlayer.getVideoData === 'function') ? window.ytPlayer.getVideoData()?.video_id : null;
+    if (loadedId === targetVideoId) {
+        const localTime = typeof window.ytPlayer.getCurrentTime === 'function' ? window.ytPlayer.getCurrentTime() : 0;
+        if (Math.abs(localTime - targetTime) > 2.5 && typeof window.ytPlayer.seekTo === 'function') {
+            window.ytPlayer.seekTo(targetTime, true);
         }
-        setTimeout(() => { window._ytApplyingRemote = false; }, 500);
-    }, 600);
+        if (data.isPlaying) window.ytPlayer.playVideo();
+        else window.ytPlayer.pauseVideo();
+    } else {
+        window.ytPlayer.loadVideoById({ videoId: targetVideoId, startSeconds: targetTime });
+        setTimeout(() => {
+            lockRemoteYtEvents(1500);
+            if (window.ytPlayer && typeof window.ytPlayer.pauseVideo === 'function') {
+                if (data.isPlaying) window.ytPlayer.playVideo();
+                else window.ytPlayer.pauseVideo();
+            }
+        }, 700);
+    }
 };
 
 window.handleIncomingYtState = function(data) {
@@ -152,21 +180,22 @@ window.handleIncomingYtState = function(data) {
     const transitSec = data.sentAt ? Math.max(0, Math.min(2, (Date.now() - data.sentAt) / 1000)) : 0;
     const expectedTime = (data.currentTime || 0) + (data.state === 'play' ? transitSec : 0);
 
-    window._ytApplyingRemote = true;
+    // Trava eventos de retorno por 2.4 segundos para impedir ping-pong entre os jogadores!
+    lockRemoteYtEvents(2400);
 
     if (typeof data.index === 'number' && data.index !== window.currentQueueIndex && window.ytQueue[data.index]) {
         window.currentQueueIndex = data.index;
-        window.loadAndPlayVideo(window.ytQueue[data.index].id, data.index, expectedTime, false);
+        window.loadAndPlayVideo(window.ytQueue[data.index].id, data.index, expectedTime, true);
     } else {
         const localTime = typeof window.ytPlayer.getCurrentTime === 'function' ? window.ytPlayer.getCurrentTime() : 0;
-        if (Math.abs(localTime - expectedTime) > 1.2 && typeof window.ytPlayer.seekTo === 'function') {
+        if (Math.abs(localTime - expectedTime) > 2.5 && typeof window.ytPlayer.seekTo === 'function') {
             window.ytPlayer.seekTo(expectedTime, true);
-            window._ytLastKnownTime = expectedTime;
         }
 
-        if (data.state === 'pause' && typeof window.ytPlayer.pauseVideo === 'function') {
+        const curState = typeof window.ytPlayer.getPlayerState === 'function' ? window.ytPlayer.getPlayerState() : -1;
+        if (data.state === 'pause' && curState !== 2 && typeof window.ytPlayer.pauseVideo === 'function') {
             window.ytPlayer.pauseVideo();
-        } else if (data.state === 'play' && typeof window.ytPlayer.playVideo === 'function') {
+        } else if (data.state === 'play' && curState !== 1 && typeof window.ytPlayer.playVideo === 'function') {
             window.ytPlayer.playVideo();
         }
     }
@@ -176,8 +205,6 @@ window.handleIncomingYtState = function(data) {
         badge.innerText = data.state === 'pause' ? '⏸️ PAUSED' : '🟢 SYNCED';
         badge.style.color = data.state === 'pause' ? '#fbbf24' : '#10b981';
     }
-
-    setTimeout(() => { window._ytApplyingRemote = false; }, 450);
 };
 
 window.ytApiTag = document.createElement('script');
@@ -196,13 +223,13 @@ window.onYouTubeIframeAPIReady = function () {
                 if (window.pendingYtSync) {
                     const p = window.pendingYtSync;
                     window.pendingYtSync = null;
+                    lockRemoteYtEvents(2800);
                     document.getElementById('yt-wrapper').style.display = 'block';
-                    window._ytApplyingRemote = true;
                     window.ytPlayer.loadVideoById({ videoId: p.videoId, startSeconds: p.time });
                     setTimeout(() => {
+                        lockRemoteYtEvents(1500);
                         if (!p.isPlaying) window.ytPlayer.pauseVideo();
-                        window._ytApplyingRemote = false;
-                    }, 600);
+                    }, 700);
                 } else if (window.socket && window.socket.readyState === WebSocket.OPEN) {
                     window.socket.send(JSON.stringify({ action: 'yt_request_sync', userId: window.myId }));
                 }
@@ -212,21 +239,18 @@ window.onYouTubeIframeAPIReady = function () {
                     if (window.ytQueue.length === 0) return;
                     const nextIdx = (window.currentQueueIndex + 1) >= window.ytQueue.length ? 0 : (window.currentQueueIndex + 1);
                     window.currentQueueIndex = nextIdx;
-                    window.loadAndPlayVideo(window.ytQueue[nextIdx].id, nextIdx, 0, false);
+                    window.loadAndPlayVideo(window.ytQueue[nextIdx].id, nextIdx, 0, true);
                     return;
                 }
 
-                if (window._ytApplyingRemote) return;
+                // Se estamos aplicando um comando remoto ou carregando vídeo, NUNCA retransmite de volta!
+                if (isRemoteYtLocked()) return;
 
                 if (event.data === YT.PlayerState.PLAYING) {
                     const cur = window.ytPlayer.getCurrentTime();
-                    window._ytLastKnownTime = cur;
-                    window._ytLastState = 1;
                     window.broadcastYtState('play', cur);
                 } else if (event.data === YT.PlayerState.PAUSED) {
                     const cur = window.ytPlayer.getCurrentTime();
-                    window._ytLastKnownTime = cur;
-                    window._ytLastState = 2;
                     window.broadcastYtState('pause', cur);
                 }
             },
@@ -237,10 +261,9 @@ window.onYouTubeIframeAPIReady = function () {
         }
     });
 
-    // Progress Bar Update & Native Iframe Scrub Detector
+    // Atualiza apenas a barra visual (sem o detector de scrub automático que causava loop infinito durante buffering!)
     setInterval(() => {
         if (!window.ytPlayerReady || !window.ytPlayer || typeof window.ytPlayer.getCurrentTime !== 'function') return;
-        const state = window.ytPlayer.getPlayerState();
         const cur = window.ytPlayer.getCurrentTime() || 0;
         const dur = window.ytPlayer.getDuration() || 0;
 
@@ -253,15 +276,6 @@ window.onYouTubeIframeAPIReady = function () {
         if (slider && !window._ytUserScrubbing && dur > 0) {
             slider.value = (cur / dur) * 100;
         }
-
-        // Detect if the user scrubbed the timeline directly inside the YouTube iframe
-        if (state === YT.PlayerState.PLAYING && !window._ytApplyingRemote) {
-            const expected = window._ytLastKnownTime + 0.5;
-            if (Math.abs(cur - expected) > 2.2) {
-                window.broadcastYtState('seek', cur);
-            }
-        }
-        window._ytLastKnownTime = cur;
     }, 500);
 };
 
@@ -269,7 +283,7 @@ window.loadAndPlayVideo = function(videoId, index = -1, startSeconds = 0, isRemo
     if (!videoId) return;
     window.injectYtSyncBar();
     const wrapper = document.getElementById('yt-wrapper');
-    if (wrapper && wrapper.style.display === 'none' && window.currentQueueIndex === -1) {
+    if (wrapper && wrapper.style.display === 'none') {
         wrapper.style.display = 'block';
     }
     if (index !== -1) window.currentQueueIndex = index;
@@ -280,10 +294,8 @@ window.loadAndPlayVideo = function(videoId, index = -1, startSeconds = 0, isRemo
     }
 
     if (window.ytPlayerReady && window.ytPlayer && typeof window.ytPlayer.loadVideoById === 'function') {
-        window._ytApplyingRemote = isRemote;
+        lockRemoteYtEvents(2500);
         window.ytPlayer.loadVideoById({ videoId: videoId, startSeconds: startSeconds });
-        window._ytLastKnownTime = startSeconds;
-        setTimeout(() => { window._ytApplyingRemote = false; }, 500);
     } else {
         window.pendingYtSync = { videoId: videoId, time: startSeconds, isPlaying: true };
     }
@@ -384,7 +396,7 @@ window.saveYtPlaylist = function() {
 window.loadYtPlaylist = function() {
     const playlists = JSON.parse(localStorage.getItem('conflict_yt_playlists') || '{}');
     const names = Object.keys(playlists);
-    if (names.length === 0) return alert("You have no saved playlists.");
+    if (names.length === 0) return;
     
     const name = prompt("Which playlist do you want to load?\nAvailable: " + names.join(", "));
     if (playlists[name]) {
@@ -394,12 +406,12 @@ window.loadYtPlaylist = function() {
         if (window.ytQueue[0]) window.loadAndPlayVideo(window.ytQueue[0].id, 0, 0, false);
         window.sendFullYtSync(null);
         if (window.addChatLine) window.addChatLine('System', `📂 Playlist **${name}** loaded and synced to the room!`, 'system');
-    } else if (name) alert("Playlist not found.");
+    }
 };
 
 window.loadRecentQueue = function() {
     const recent = JSON.parse(localStorage.getItem('conflict_yt_recent_queue') || 'null');
-    if (!recent || !recent.queue || recent.queue.length === 0) return alert("No recent queue found.");
+    if (!recent || !recent.queue || recent.queue.length === 0) return;
     
     window.ytQueue = recent.queue;
     window.currentQueueIndex = recent.index >= 0 ? recent.index : 0;
@@ -419,7 +431,7 @@ document.getElementById('yt-queue-add-btn')?.addEventListener('click', () => {
         window.queueVideo(vidId, true);
         inp.value = '';
         if (window.addChatLine) window.addChatLine('System', `➕ Added video to queue`, 'system');
-    } else alert("Invalid YouTube Link!");
+    }
 });
 
 document.getElementById('yt-play-btn')?.addEventListener('click', async () => { 
@@ -439,7 +451,7 @@ document.getElementById('yt-play-btn')?.addEventListener('click', async () => {
             window.socket.send(JSON.stringify({ action: 'yt_load', videoId: vidId, title: vidTitle }));
         }
         inp.value = ''; 
-    } else alert("Invalid YouTube Link!"); 
+    }
 });
 
 document.getElementById('yt-skip-btn')?.addEventListener('click', () => {
@@ -454,12 +466,29 @@ document.getElementById('toggle-queue-btn')?.addEventListener('click', () => {
 document.getElementById('yt-playpause-btn')?.addEventListener('click', () => {
     if (!window.ytPlayer || typeof window.ytPlayer.getPlayerState !== 'function') return;
     const curTime = window.ytPlayer.getCurrentTime() || 0;
+    lockRemoteYtEvents(1200);
     if (window.ytPlayer.getPlayerState() === YT.PlayerState.PLAYING) {
         window.ytPlayer.pauseVideo();
-        window.broadcastYtState('pause', curTime);
+        window.socket?.send(JSON.stringify({
+            action: 'yt_state',
+            userId: window.myId,
+            state: 'pause',
+            videoId: window.ytQueue[window.currentQueueIndex]?.id || null,
+            index: window.currentQueueIndex,
+            currentTime: curTime,
+            sentAt: Date.now()
+        }));
     } else {
         window.ytPlayer.playVideo();
-        window.broadcastYtState('play', curTime);
+        window.socket?.send(JSON.stringify({
+            action: 'yt_state',
+            userId: window.myId,
+            state: 'play',
+            videoId: window.ytQueue[window.currentQueueIndex]?.id || null,
+            index: window.currentQueueIndex,
+            currentTime: curTime,
+            sentAt: Date.now()
+        }));
     }
 });
 
@@ -473,7 +502,7 @@ document.getElementById('add-sound-upload')?.addEventListener('change', (event) 
     const file = event.target.files[0]; if (!file) return;
     const audioUrl = URL.createObjectURL(file); const tempAudio = new Audio(audioUrl);
     tempAudio.onloadedmetadata = () => {
-        if (tempAudio.duration > 5) return alert(`Error: Audio must be 5 seconds or less.`);
+        if (tempAudio.duration > 5) return;
         const btn = document.createElement('button'); btn.textContent = file.name.split('.')[0]; btn.className = 'secondary-btn';
         btn.onclick = () => {
             if (window.initAudioCtx) window.initAudioCtx(); 
